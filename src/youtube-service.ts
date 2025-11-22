@@ -128,6 +128,80 @@ export class YouTubeService {
     options: TranscriptOptions
   ): Promise<TranscriptSegment[]>;
 
+  /**
+   * Map country code to language code
+   */
+  private countryToLanguage(countryCode?: string): string | null {
+    if (!countryCode) return null;
+    
+    const countryLangMap: Record<string, string> = {
+      // Korean
+      'KR': 'ko',
+      // English
+      'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'NZ': 'en', 'IE': 'en', 'ZA': 'en',
+      // Japanese
+      'JP': 'ja',
+      // Spanish
+      'ES': 'es', 'MX': 'es', 'AR': 'es', 'CO': 'es', 'CL': 'es', 'PE': 'es', 'VE': 'es',
+      // French
+      'FR': 'fr', 'BE': 'fr', 'CH': 'fr', 'CA': 'fr', 'LU': 'fr',
+      // German
+      'DE': 'de', 'AT': 'de', 'CH': 'de',
+      // Chinese
+      'CN': 'zh', 'TW': 'zh', 'HK': 'zh', 'SG': 'zh',
+      // Portuguese
+      'BR': 'pt', 'PT': 'pt',
+      // Russian
+      'RU': 'ru',
+      // Italian
+      'IT': 'it', 'CH': 'it',
+      // Arabic
+      'SA': 'ar', 'AE': 'ar', 'EG': 'ar', 'IQ': 'ar',
+      // Hindi
+      'IN': 'hi',
+      // Thai
+      'TH': 'th',
+      // Vietnamese
+      'VN': 'vi',
+      // Indonesian
+      'ID': 'id',
+      // Turkish
+      'TR': 'tr',
+      // Polish
+      'PL': 'pl',
+      // Dutch
+      'NL': 'nl', 'BE': 'nl',
+    };
+    
+    return countryLangMap[countryCode.toUpperCase()] || null;
+  }
+
+  /**
+   * Detect language from video's channel country
+   */
+  private async detectLanguageFromChannel(videoId: string): Promise<string | null> {
+    try {
+      // Get video details to find channel ID
+      const videoData = await this.getVideoDetails(videoId);
+      const channelId = videoData.items?.[0]?.snippet?.channelId;
+      
+      if (!channelId) return null;
+      
+      // Get channel details to find country
+      const channelData = await this.getChannelDetails(channelId);
+      const countryCode = channelData.items?.[0]?.snippet?.country;
+      
+      if (!countryCode) return null;
+      
+      // Convert country code to language code
+      return this.countryToLanguage(countryCode);
+    } catch (error) {
+      // If detection fails, return null (will use fallback)
+      console.log(`Failed to detect language from channel for video ${videoId}:`, error);
+      return null;
+    }
+  }
+
   async getTranscript(
     videoId: string,
     langOrOptions?: string | TranscriptOptions
@@ -144,26 +218,105 @@ export class YouTubeService {
       return this.processTranscript(cachedTranscript, options);
     }
 
-    try {
-      const scraperOptions: { videoID: string; lang?: string } = { videoID: videoId };
-
-      if (options.language) {
-        scraperOptions.lang = options.language;
+    // Fallback languages to try if the requested language fails
+    const fallbackLanguages = ['en', 'ko', 'ja', 'es', 'fr', 'de', 'zh', 'pt', 'ru', 'it', 'ar', 'hi'];
+    const languagesToTry: string[] = [];
+    
+    if (options.language) {
+      // If a specific language is requested, try it first
+      languagesToTry.push(options.language);
+      // Then try fallback languages (excluding the requested one)
+      languagesToTry.push(...fallbackLanguages.filter(lang => lang !== options.language));
+    } else {
+      // If no language is specified, try to detect from channel country
+      const detectedLanguage = await this.detectLanguageFromChannel(videoId);
+      
+      if (detectedLanguage) {
+        // Try detected language first
+        languagesToTry.push(detectedLanguage);
+        // Then try other fallback languages (excluding the detected one)
+        languagesToTry.push(...fallbackLanguages.filter(lang => lang !== detectedLanguage));
+      } else {
+        // If detection fails, use fallback languages in order
+        languagesToTry.push(...fallbackLanguages);
       }
+    }
 
-      const captions = await getSubtitles(scraperOptions);
-      this.transcriptCache.set(cacheKey, captions);
+    let lastError: Error | null = null;
+    let hasNoCaptionsError = false;
 
-      return this.processTranscript(captions, options);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`Error getting video transcript for ${videoId}:`, error);
+    // Try each language until one succeeds
+    for (let i = 0; i < languagesToTry.length; i++) {
+      const lang = languagesToTry[i];
+      try {
+        const scraperOptions: { videoID: string; lang?: string } = { videoID: videoId };
+        scraperOptions.lang = lang;
 
+        const captions = await getSubtitles(scraperOptions);
+        
+        // If we got captions, cache and return them
+        if (captions && captions.length > 0) {
+          const cacheOptions = { ...options, language: lang };
+          const cacheKeyWithLang = this.generateTranscriptCacheKey(videoId, cacheOptions);
+          this.transcriptCache.set(cacheKeyWithLang, captions);
+          
+          // Also cache with original options for consistency
+          this.transcriptCache.set(cacheKey, captions);
+          
+          return this.processTranscript(captions, options);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+        
+        // Check if this is a "no captions" error (video has no captions at all)
+        // This is different from "language not available" error
+        // Pattern 1: "Could not find captions for video: [videoId]" (no language specified)
+        // Pattern 2: "Could not find captions for [videoId]" (no language specified)
+        const isNoCaptionsError = (
+          (errorMessage.includes('Could not find captions for video:') || 
+           errorMessage.includes('Could not find captions for ')) &&
+          !errorMessage.match(/Could not find \w+ captions for/)
+        );
+        
+        if (isNoCaptionsError) {
+          hasNoCaptionsError = true;
+          // If video has no captions at all, don't try other languages
+          break;
+        }
+        
+        // For language-specific errors (e.g., "Could not find en captions"), continue trying other languages
+        // Only log if it's not the last language and not a "no captions" error
+        if (i < languagesToTry.length - 1 && !hasNoCaptionsError) {
+          // Suppress verbose logging - only log if it's the first few attempts
+          if (i < 3) {
+            console.log(`Trying transcript for ${videoId} in language ${lang} failed, trying next language...`);
+          }
+        }
+      }
+    }
+
+    // If all languages failed, throw an error
+    const errorMessage = lastError?.message || 'Unknown error';
+    
+    if (hasNoCaptionsError) {
+      // Video has no captions at all
+      console.error(`Transcript not available for video: ${videoId} (no captions found)`);
       throw new TranscriptError({
-        message: `Failed to fetch transcript: ${errorMessage}`,
+        message: `No captions available for this video: ${videoId}`,
         videoId,
         options,
-        originalError: error instanceof Error ? error : new Error(errorMessage)
+        originalError: lastError || new Error(errorMessage)
+      });
+    } else {
+      // Tried all languages but none worked
+      console.error(`Error getting video transcript for ${videoId}:`, lastError);
+      console.error(`Transcript not available for video: ${videoId} (tried all languages)`);
+      throw new TranscriptError({
+        message: `Failed to fetch transcript in any available language: ${errorMessage}`,
+        videoId,
+        options,
+        originalError: lastError || new Error(errorMessage)
       });
     }
   }

@@ -49,6 +49,11 @@ npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
 
 ## Usage
 
+### Cloudflare Workers Deployment
+
+The server is deployed on Cloudflare Workers and accessible at:
+- **MCP Server URL**: `https://youtube-mcp-server.goodprogram.workers.dev`
+
 ### Building and Running
 
 1. Build the project:
@@ -101,6 +106,11 @@ npx @modelcontextprotocol/inspector
 - The server is fully compatible with Smithery's new hosting requirements
 - All existing Claude Desktop integrations will continue to work seamlessly
 - No changes required for end users
+
+**Cloudflare Workers Deployment**:
+- The server is deployed on Cloudflare Workers at `https://youtube-mcp-server.goodprogram.workers.dev`
+- All API endpoints are available at the deployed URL
+- MCP endpoint: `https://youtube-mcp-server.goodprogram.workers.dev/mcp`
 
 ## Docker Deployment
 

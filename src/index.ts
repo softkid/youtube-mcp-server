@@ -996,15 +996,38 @@ const cloudflareWorker = {
       youtubeService = new YouTubeService(apiKey);
     }
     
-    // CORS middleware
+    // CORS middleware - Cloudflare Access와 호환되도록 강화
     app.use('*', async (c, next) => {
+      // CORS 헤더 설정
       c.header('Access-Control-Allow-Origin', '*');
-      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      c.header('Access-Control-Allow-Headers', 'Content-Type');
+      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, CF-Access-Client-Id, CF-Access-Client-Secret');
+      c.header('Access-Control-Allow-Credentials', 'true');
+      c.header('Access-Control-Max-Age', '86400'); // 24시간
+      
+      // Cloudflare Access 헤더 확인 (선택적)
+      const cfAccessClientId = c.req.header('CF-Access-Client-Id');
+      const cfAccessClientSecret = c.req.header('CF-Access-Client-Secret');
+      
+      // OPTIONS 프리플라이트 요청 처리
       if (c.req.method === 'OPTIONS') {
         return c.json({}, 200);
       }
+      
+      // Cloudflare Access 인증이 필요한 경우를 위한 로깅 (디버깅용)
+      if (process.env.DEBUG_ACCESS === 'true') {
+        console.log('Request headers:', {
+          'CF-Access-Client-Id': cfAccessClientId ? 'present' : 'missing',
+          'CF-Access-Client-Secret': cfAccessClientSecret ? 'present' : 'missing',
+          'Origin': c.req.header('Origin'),
+          'User-Agent': c.req.header('User-Agent')
+        });
+      }
+      
       await next();
+      
+      // 응답에도 CORS 헤더 보장
+      c.header('Access-Control-Allow-Origin', '*');
     });
       
     // REST API: 비디오 검색
@@ -1632,6 +1655,27 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
     
     app.get('/health', (c) => {
       return c.json({ status: 'ok' });
+    });
+    
+    // 에러 핸들러 - 모든 에러 응답에 CORS 헤더 추가
+    app.onError((err, c) => {
+      console.error('Error:', err);
+      // 에러 응답에도 CORS 헤더 추가
+      c.header('Access-Control-Allow-Origin', '*');
+      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      return c.json({ 
+        error: err.message || 'Internal Server Error',
+        status: 500
+      }, 500);
+    });
+    
+    // 404 핸들러
+    app.notFound((c) => {
+      c.header('Access-Control-Allow-Origin', '*');
+      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      return c.json({ error: 'Not Found', status: 404 }, 404);
     });
     
     return app.fetch(request);

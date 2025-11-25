@@ -134,6 +134,30 @@ npx @modelcontextprotocol/inspector
 - All API endpoints are available at the deployed URL
 - MCP endpoint: `https://youtube-mcp-server.goodprogram.workers.dev/mcp`
 
+#### Cloudflare Access 설정
+
+API가 Cloudflare Access로 보호되어 있는 경우, 프론트엔드에서 접근하려면 다음 설정이 필요합니다:
+
+**옵션 1: API 경로를 공개 접근 허용 (권장)**
+1. Cloudflare Dashboard → Zero Trust → Access → Applications
+2. `youtube-mcp-server` 애플리케이션 선택
+3. Policies에서 `/api/*` 경로는 "Allow" 정책 추가 (인증 없이 접근 허용)
+4. 또는 전체 Worker를 공개 접근으로 변경
+
+**옵션 2: CORS 및 Access 헤더 설정**
+- 코드에서 CORS 헤더가 이미 설정되어 있습니다
+- Cloudflare Access 헤더(`CF-Access-Client-Id`, `CF-Access-Client-Secret`)도 허용 목록에 포함되어 있습니다
+- 프리플라이트 OPTIONS 요청이 정상적으로 처리됩니다
+
+**옵션 3: Service Token 사용 (프로그래밍 방식 접근)**
+1. Cloudflare Dashboard → Zero Trust → Access → Service Tokens
+2. 새 Service Token 생성
+3. 프론트엔드에서 요청 시 헤더에 포함:
+   ```
+   CF-Access-Client-Id: <your-client-id>
+   CF-Access-Client-Secret: <your-client-secret>
+   ```
+
 ## Docker Deployment
 
 The project includes a Dockerfile for containerized deployment:

@@ -118,35 +118,26 @@ export class YouTubeService {
     }
   }
 
-  async getTranscript(
-    videoId: string,
-    language?: string
-  ): Promise<TranscriptSegment[]>;
-
-  async getTranscript(
-    videoId: string,
-    options: TranscriptOptions
-  ): Promise<TranscriptSegment[]>;
-
   /**
    * Map country code to language code
    */
   private countryToLanguage(countryCode?: string): string | null {
     if (!countryCode) return null;
     
+    // Note: Some countries have multiple languages, priority is set here
     const countryLangMap: Record<string, string> = {
       // Korean
       'KR': 'ko',
       // English
-      'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'NZ': 'en', 'IE': 'en', 'ZA': 'en',
+      'US': 'en', 'GB': 'en', 'AU': 'en', 'NZ': 'en', 'IE': 'en', 'ZA': 'en',
       // Japanese
       'JP': 'ja',
       // Spanish
       'ES': 'es', 'MX': 'es', 'AR': 'es', 'CO': 'es', 'CL': 'es', 'PE': 'es', 'VE': 'es',
-      // French
-      'FR': 'fr', 'BE': 'fr', 'CH': 'fr', 'CA': 'fr', 'LU': 'fr',
+      // French (CA and BE are multilingual, defaulting to French)
+      'FR': 'fr', 'BE': 'fr', 'LU': 'fr',
       // German
-      'DE': 'de', 'AT': 'de', 'CH': 'de',
+      'DE': 'de', 'AT': 'de',
       // Chinese
       'CN': 'zh', 'TW': 'zh', 'HK': 'zh', 'SG': 'zh',
       // Portuguese
@@ -154,7 +145,7 @@ export class YouTubeService {
       // Russian
       'RU': 'ru',
       // Italian
-      'IT': 'it', 'CH': 'it',
+      'IT': 'it',
       // Arabic
       'SA': 'ar', 'AE': 'ar', 'EG': 'ar', 'IQ': 'ar',
       // Hindi
@@ -170,12 +161,19 @@ export class YouTubeService {
       // Polish
       'PL': 'pl',
       // Dutch
-      'NL': 'nl', 'BE': 'nl',
+      'NL': 'nl',
+      // Multilingual countries - priority languages
+      'CA': 'en', // Canada: English priority
+      'CH': 'de', // Switzerland: German priority
     };
     
     return countryLangMap[countryCode.toUpperCase()] || null;
   }
 
+  // Method overloads for getTranscript
+  getTranscript(videoId: string, language?: string): Promise<TranscriptSegment[]>;
+  getTranscript(videoId: string, options: TranscriptOptions): Promise<TranscriptSegment[]>;
+  
   /**
    * Detect language from video's channel country
    */
@@ -286,12 +284,9 @@ export class YouTubeService {
         }
         
         // For language-specific errors (e.g., "Could not find en captions"), continue trying other languages
-        // Only log if it's not the last language and not a "no captions" error
-        if (i < languagesToTry.length - 1 && !hasNoCaptionsError) {
-          // Suppress verbose logging - only log if it's the first few attempts
-          if (i < 3) {
-            console.log(`Trying transcript for ${videoId} in language ${lang} failed, trying next language...`);
-          }
+        // Suppress verbose logging - only log in debug mode
+        if (process.env.DEBUG_TRANSCRIPT === 'true' && i < languagesToTry.length - 1 && !hasNoCaptionsError && i < 2) {
+          console.log(`[DEBUG] Trying transcript for ${videoId} in language ${lang} failed, trying next language...`);
         }
       }
     }
@@ -300,8 +295,10 @@ export class YouTubeService {
     const errorMessage = lastError?.message || 'Unknown error';
     
     if (hasNoCaptionsError) {
-      // Video has no captions at all
-      console.error(`Transcript not available for video: ${videoId} (no captions found)`);
+      // Video has no captions at all - only log once at debug level
+      if (process.env.DEBUG_TRANSCRIPT === 'true') {
+        console.log(`[DEBUG] Transcript not available for video: ${videoId} (no captions found)`);
+      }
       throw new TranscriptError({
         message: `No captions available for this video: ${videoId}`,
         videoId,
@@ -309,9 +306,10 @@ export class YouTubeService {
         originalError: lastError || new Error(errorMessage)
       });
     } else {
-      // Tried all languages but none worked
-      console.error(`Error getting video transcript for ${videoId}:`, lastError);
-      console.error(`Transcript not available for video: ${videoId} (tried all languages)`);
+      // Tried all languages but none worked - only log once at debug level
+      if (process.env.DEBUG_TRANSCRIPT === 'true') {
+        console.log(`[DEBUG] Transcript not available for video: ${videoId} (tried ${languagesToTry.length} languages)`);
+      }
       throw new TranscriptError({
         message: `Failed to fetch transcript in any available language: ${errorMessage}`,
         videoId,

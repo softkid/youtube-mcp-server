@@ -1316,7 +1316,14 @@ if (isMainModule) {
             }))
           });
         } catch (error: any) {
-          console.error('Video transcript error:', error);
+          // Transcript errors are expected for videos without captions - only log in debug mode
+          if (process.env.DEBUG_TRANSCRIPT === 'true') {
+            console.error('[DEBUG] Video transcript error:', error.message);
+          }
+          // Return 404 for transcript not available (expected case)
+          if (error.message?.includes('No captions available') || error.message?.includes('Failed to fetch transcript')) {
+            return res.status(404).json({ error: error.message || 'Transcript not available for this video' });
+          }
           res.status(500).json({ error: error.message || 'Internal server error' });
         }
       });
@@ -1349,7 +1356,13 @@ if (isMainModule) {
           
           res.json(transcript);
         } catch (error: any) {
-          console.error('Enhanced transcript error:', error);
+          // Only log in debug mode to reduce noise
+          if (process.env.DEBUG_TRANSCRIPT === 'true') {
+            console.error('[DEBUG] Enhanced transcript error:', error.message);
+          }
+          if (error.message?.includes('No captions available') || error.message?.includes('Failed to fetch transcript')) {
+            return res.status(404).json({ error: error.message || 'Transcript not available' });
+          }
           res.status(500).json({ error: error.message || 'Internal server error' });
         }
       });
@@ -1372,7 +1385,13 @@ if (isMainModule) {
             metadata: keyMomentsTranscript.metadata
           });
         } catch (error: any) {
-          console.error('Key moments error:', error);
+          // Only log in debug mode to reduce noise
+          if (process.env.DEBUG_TRANSCRIPT === 'true') {
+            console.error('[DEBUG] Key moments error:', error.message);
+          }
+          if (error.message?.includes('No captions available') || error.message?.includes('Failed to fetch transcript') || error.message?.includes('No transcript available')) {
+            return res.status(404).json({ error: error.message || 'Transcript not available' });
+          }
           res.status(500).json({ error: error.message || 'Internal server error' });
         }
       });
@@ -1395,7 +1414,13 @@ if (isMainModule) {
             metadata: segmentedTranscript.metadata
           });
         } catch (error: any) {
-          console.error('Segmented transcript error:', error);
+          // Only log in debug mode to reduce noise
+          if (process.env.DEBUG_TRANSCRIPT === 'true') {
+            console.error('[DEBUG] Segmented transcript error:', error.message);
+          }
+          if (error.message?.includes('No captions available') || error.message?.includes('Failed to fetch transcript')) {
+            return res.status(404).json({ error: error.message || 'Transcript not available' });
+          }
           res.status(500).json({ error: error.message || 'Internal server error' });
         }
       });
@@ -1473,7 +1498,10 @@ if (isMainModule) {
             transcriptText = transcriptData.map(caption => caption.text).join(' ');
           } catch (transcriptError) {
             // 트랜스크립트가 없는 경우도 분석 가능하도록 계속 진행
-            console.log('Transcript not available for video:', videoId);
+            // Only log in debug mode to reduce noise
+            if (process.env.DEBUG_TRANSCRIPT === 'true') {
+              console.log('[DEBUG] Transcript not available for video:', videoId);
+            }
           }
           
           // 비디오 통계 정보

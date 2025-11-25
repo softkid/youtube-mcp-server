@@ -54,6 +54,28 @@ npx -y @smithery/cli install @coyaSONG/youtube-mcp-server --client claude
 The server is deployed on Cloudflare Workers and accessible at:
 - **MCP Server URL**: `https://youtube-mcp-server.goodprogram.workers.dev`
 
+#### Setting Environment Variables
+
+To deploy to Cloudflare Workers, you need to set the `YOUTUBE_API_KEY` as a secret:
+
+```bash
+# Install wrangler CLI if not already installed
+npm install -g wrangler
+
+# Login to Cloudflare
+wrangler login
+
+# Set the YouTube API key as a secret
+wrangler secret put YOUTUBE_API_KEY
+# When prompted, enter your YouTube Data API v3 key
+```
+
+Alternatively, you can set secrets via the Cloudflare Dashboard:
+1. Go to Cloudflare Dashboard → Workers & Pages
+2. Select your worker (`youtube-mcp-server`)
+3. Go to Settings → Variables and Secrets
+4. Add a new secret variable: `YOUTUBE_API_KEY`
+
 ### Building and Running
 
 1. Build the project:

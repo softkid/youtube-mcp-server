@@ -6,7 +6,11 @@ main = "src/worker.ts"
 
 # Environment variables
 [vars]
-# YOUTUBE_API_KEY should be set in Cloudflare Workers dashboard or via wrangler secret
+# YOUTUBE_API_KEY should be set as a secret via:
+# 1. Cloudflare Dashboard: Workers & Pages → Settings → Variables and Secrets
+# 2. Command line: wrangler secret put YOUTUBE_API_KEY
+#
+# Note: Secrets are encrypted and not visible in this file
 
 # Build configuration
 [build]

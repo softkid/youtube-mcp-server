@@ -170,10 +170,6 @@ export class YouTubeService {
     return countryLangMap[countryCode.toUpperCase()] || null;
   }
 
-  // Method overloads for getTranscript
-  getTranscript(videoId: string, language?: string): Promise<TranscriptSegment[]>;
-  getTranscript(videoId: string, options: TranscriptOptions): Promise<TranscriptSegment[]>;
-  
   /**
    * Detect language from video's channel country
    */
@@ -200,6 +196,9 @@ export class YouTubeService {
     }
   }
 
+  // Method overloads for getTranscript
+  getTranscript(videoId: string, language?: string): Promise<TranscriptSegment[]>;
+  getTranscript(videoId: string, options: TranscriptOptions): Promise<TranscriptSegment[]>;
   async getTranscript(
     videoId: string,
     langOrOptions?: string | TranscriptOptions

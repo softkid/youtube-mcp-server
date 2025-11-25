@@ -12,8 +12,7 @@
     "prebuild": "rm -rf dist && mkdir -p dist",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "deploy": "echo 'This Express server should be deployed via Docker or traditional Node.js hosting, not Cloudflare Workers. See README.md for deployment instructions.'"
+    "dev": "tsx src/index.ts"
   },
   "repository": {
     "type": "git",
@@ -28,16 +27,16 @@
   "homepage": "https://github.com/coyaSONG/youtube-mcp-server#readme",
   "description": "",
   "dependencies": {
+    "@hono/node-server": "^1.12.0",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "dotenv": "^16.4.7",
-    "express": "^4.21.0",
+    "hono": "^4.6.11",
     "googleapis": "^148.0.0",
     "node-cache": "^5.1.2",
     "youtube-captions-scraper": "^2.0.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/node": "^22.13.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",

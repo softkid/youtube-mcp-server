@@ -1,12 +1,16 @@
-# This project is an Express server, not a Cloudflare Worker
-# Deployment should be done via Docker or traditional Node.js hosting
-# This file exists only to prevent wrangler deploy errors during CI/CD
-
+# Wrangler configuration for Cloudflare Workers
 name = "youtube-mcp-server"
 compatibility_date = "2025-11-25"
-main = "dist/index.js"
+main = "src/index.ts"
 
-# Note: This Express server cannot run on Cloudflare Workers
-# Use Docker or traditional Node.js hosting instead
-# See README.md for Docker deployment instructions
+# Environment variables
+[vars]
+# YOUTUBE_API_KEY should be set in Cloudflare Workers dashboard or via wrangler secret
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Note: This project now uses Hono framework and is compatible with Cloudflare Workers
+# The server can run both as a Cloudflare Worker and as a local Node.js server
 

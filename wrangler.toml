@@ -1,0 +1,12 @@
+# This project is an Express server, not a Cloudflare Worker
+# Deployment should be done via Docker or traditional Node.js hosting
+# This file exists only to prevent wrangler deploy errors during CI/CD
+
+name = "youtube-mcp-server"
+compatibility_date = "2025-11-25"
+main = "dist/index.js"
+
+# Note: This Express server cannot run on Cloudflare Workers
+# Use Docker or traditional Node.js hosting instead
+# See README.md for Docker deployment instructions
+

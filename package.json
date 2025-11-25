@@ -8,8 +8,8 @@
     "youtube-mcp-server": "./dist/index.js"
   },
   "scripts": {
-    "clean": "rm -rf dist",
-    "prebuild": "rm -rf dist && mkdir -p dist",
+    "clean": "rimraf dist",
+    "prebuild": "rimraf dist && mkdir dist",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"
@@ -30,14 +30,15 @@
     "@hono/node-server": "^1.12.0",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "dotenv": "^16.4.7",
-    "hono": "^4.6.11",
     "googleapis": "^148.0.0",
+    "hono": "^4.6.11",
     "node-cache": "^5.1.2",
     "youtube-captions-scraper": "^2.0.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.14",
+    "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.8.2"

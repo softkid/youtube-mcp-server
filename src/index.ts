@@ -950,9 +950,6 @@ ${summaryInstructions}`
   return server.server;
 }
 
-// Export as default for Smithery
-export default createMcpServer;
-
 // Local development server setup
 // Check if this file is being run directly (not imported)
 const isMainModule = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || 
@@ -981,15 +978,14 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
-function formatTime(milliseconds: number): string {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+// Cloudflare Workers ExecutionContext type
+interface ExecutionContext {
+  waitUntil(promise: Promise<any>): void;
+  passThroughOnException(): void;
 }
 
 // Cloudflare Workers export
-export default {
+const cloudflareWorker = {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     const { Hono } = await import('hono');
     const app = new Hono();
@@ -1014,6 +1010,10 @@ export default {
     // REST API: 비디오 검색
     app.post('/api/search-videos', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { query, maxResults = 50, channelId, order, type, videoDuration, publishedAfter, publishedBefore } = body;
         
@@ -1094,6 +1094,10 @@ export default {
     // REST API: 트렌딩 비디오 가져오기
     app.post('/api/get-trending-videos', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { regionCode = 'US', categoryId, maxResults = 10 } = body;
           
@@ -1163,6 +1167,10 @@ export default {
     // REST API: 비디오 카테고리 가져오기
     app.post('/api/get-video-categories', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { regionCode = 'US' } = body;
           
@@ -1186,6 +1194,10 @@ export default {
     // REST API: 채널 통계 가져오기
     app.post('/api/get-channel-stats', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { channelId } = body;
         
@@ -1221,6 +1233,10 @@ export default {
     // REST API: 채널 비디오 분석
     app.post('/api/analyze-channel-videos', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { channelId, maxResults = 10, sortBy = 'date' } = body;
         
@@ -1319,6 +1335,10 @@ export default {
     // REST API: 비디오 트랜스크립트 가져오기
     app.post('/api/get-video-transcript', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoId, language } = body;
         
@@ -1357,6 +1377,10 @@ export default {
     // REST API: 향상된 트랜스크립트 가져오기
     app.post('/api/enhanced-transcript', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoIds, language, format, includeMetadata, filters } = body;
         
@@ -1397,6 +1421,10 @@ export default {
     // REST API: 주요 순간 추출
     app.post('/api/get-key-moments', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoId, maxMoments = 5 } = body;
         
@@ -1427,6 +1455,10 @@ export default {
     // REST API: 세그먼트별 트랜스크립트 가져오기
     app.post('/api/get-segmented-transcript', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoId, segmentCount = 4 } = body;
         
@@ -1457,6 +1489,10 @@ export default {
     // REST API: 비디오 댓글 가져오기
     app.post('/api/get-video-comments', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoId, maxResults = 20, order = 'relevance', includeReplies = false, pageToken } = body;
         
@@ -1507,6 +1543,10 @@ export default {
     // REST API: 비디오 분석
     app.post('/api/video-analysis', async (c) => {
       try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+        
         const body = await c.req.json();
         const { videoId } = body;
         
@@ -1598,7 +1638,11 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
   }
 };
 
-export default defaultExport;
+// Export MCP server as default for Smithery
+export default createMcpServer;
+
+// Export Cloudflare Worker as named export
+export { cloudflareWorker };
 
 // Local development server (for non-Cloudflare environments)
 if (isMainModule) {
@@ -1618,12 +1662,12 @@ if (isMainModule) {
       
       youtubeService = new YouTubeService(config.youtubeApiKey);
       
-      // Use the default export's fetch handler for local development
+      // Use the cloudflare worker's fetch handler for local development
       const handler = {
         fetch: async (request: Request) => {
           // Create a mock env object for local development
           const mockEnv = { YOUTUBE_API_KEY: config.youtubeApiKey };
-          return defaultExport.fetch(request, mockEnv, {} as ExecutionContext);
+          return cloudflareWorker.fetch(request, mockEnv, {} as ExecutionContext);
         }
       };
       

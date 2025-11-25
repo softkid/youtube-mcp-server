@@ -1,7 +1,7 @@
 # Wrangler configuration for Cloudflare Workers
 name = "youtube-mcp-server"
 compatibility_date = "2025-11-25"
-main = "src/index.ts"
+main = "src/worker.ts"
 
 # Environment variables
 [vars]

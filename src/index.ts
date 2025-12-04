@@ -1644,6 +1644,240 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
       }
     });
     
+    // ===== 로그 관리 API 엔드포인트 =====
+    
+    // 채널 생성 로그 저장
+    app.post('/api/logs/channel-creation', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { id, timestamp, status, channelName, userEmail, details } = body;
+        
+        if (!id || !timestamp || !status) {
+          return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
+        }
+        
+        // 메모리에 로그 저장 (실제 환경에서는 데이터베이스 사용)
+        if (!globalThis.channelCreationLogs) {
+          globalThis.channelCreationLogs = [];
+        }
+        
+        const logEntry = { id, timestamp, status, channelName, userEmail, details };
+        globalThis.channelCreationLogs.push(logEntry);
+        
+        console.log(`[LogAPI] 채널 생성 로그 저장: ${channelName} (${status})`);
+        return c.json({ success: true, id });
+      } catch (error: any) {
+        console.error('[LogAPI] 채널 생성 로그 저장 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 브랜딩 로그 저장
+    app.post('/api/logs/branding', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { id, timestamp, topic, channelNames, tags, details } = body;
+        
+        if (!id || !timestamp || !topic) {
+          return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
+        }
+        
+        if (!globalThis.brandingLogs) {
+          globalThis.brandingLogs = [];
+        }
+        
+        const logEntry = { id, timestamp, topic, channelNames, tags, details };
+        globalThis.brandingLogs.push(logEntry);
+        
+        console.log(`[LogAPI] 브랜딩 로그 저장: ${topic}`);
+        return c.json({ success: true, id });
+      } catch (error: any) {
+        console.error('[LogAPI] 브랜딩 로그 저장 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 검색 로그 저장
+    app.post('/api/logs/search', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { id, timestamp, searchQuery, resultCount, details } = body;
+        
+        if (!id || !timestamp || !searchQuery) {
+          return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
+        }
+        
+        if (!globalThis.searchLogs) {
+          globalThis.searchLogs = [];
+        }
+        
+        const logEntry = { id, timestamp, searchQuery, resultCount, details };
+        globalThis.searchLogs.push(logEntry);
+        
+        console.log(`[LogAPI] 검색 로그 저장: ${searchQuery}`);
+        return c.json({ success: true, id });
+      } catch (error: any) {
+        console.error('[LogAPI] 검색 로그 저장 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 채널 생성 로그 조회
+    app.get('/api/logs/channel-creation', async (c) => {
+      try {
+        const status = c.req.query('status');
+        const userEmail = c.req.query('userEmail');
+        const limit = parseInt(c.req.query('limit') || '100');
+        const offset = parseInt(c.req.query('offset') || '0');
+        
+        let logs = globalThis.channelCreationLogs || [];
+        
+        if (status) {
+          logs = logs.filter((log: any) => log.status === status);
+        }
+        
+        if (userEmail) {
+          logs = logs.filter((log: any) => log.userEmail === userEmail);
+        }
+        
+        // 최신순으로 정렬
+        logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        const paginated = logs.slice(offset, offset + limit);
+        return c.json({ logs: paginated, count: paginated.length });
+      } catch (error: any) {
+        console.error('[LogAPI] 채널 생성 로그 조회 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 브랜딩 로그 조회
+    app.get('/api/logs/branding', async (c) => {
+      try {
+        const topic = c.req.query('topic');
+        const limit = parseInt(c.req.query('limit') || '100');
+        const offset = parseInt(c.req.query('offset') || '0');
+        
+        let logs = globalThis.brandingLogs || [];
+        
+        if (topic) {
+          logs = logs.filter((log: any) => log.topic.includes(topic));
+        }
+        
+        logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        const paginated = logs.slice(offset, offset + limit);
+        return c.json({ logs: paginated, count: paginated.length });
+      } catch (error: any) {
+        console.error('[LogAPI] 브랜딩 로그 조회 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 검색 로그 조회
+    app.get('/api/logs/search', async (c) => {
+      try {
+        const query = c.req.query('query');
+        const limit = parseInt(c.req.query('limit') || '100');
+        const offset = parseInt(c.req.query('offset') || '0');
+        
+        let logs = globalThis.searchLogs || [];
+        
+        if (query) {
+          logs = logs.filter((log: any) => log.searchQuery.includes(query));
+        }
+        
+        logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        const paginated = logs.slice(offset, offset + limit);
+        return c.json({ logs: paginated, count: paginated.length });
+      } catch (error: any) {
+        console.error('[LogAPI] 검색 로그 조회 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 모든 로그 조회
+    app.get('/api/logs/all', async (c) => {
+      try {
+        const limit = parseInt(c.req.query('limit') || '100');
+        const offset = parseInt(c.req.query('offset') || '0');
+        
+        const channelLogs = (globalThis.channelCreationLogs || []).map((log: any) => ({ ...log, type: 'channel_creation' }));
+        const brandingLogs = (globalThis.brandingLogs || []).map((log: any) => ({ ...log, type: 'branding' }));
+        const searchLogs = (globalThis.searchLogs || []).map((log: any) => ({ ...log, type: 'search' }));
+        
+        const allLogs = [...channelLogs, ...brandingLogs, ...searchLogs];
+        
+        // 최신순으로 정렬
+        allLogs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        const paginated = allLogs.slice(offset, offset + limit);
+        return c.json({ logs: paginated, total: allLogs.length, count: paginated.length });
+      } catch (error: any) {
+        console.error('[LogAPI] 모든 로그 조회 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 로그 통계
+    app.get('/api/logs/statistics', async (c) => {
+      try {
+        const channelLogs = globalThis.channelCreationLogs || [];
+        const brandingLogs = globalThis.brandingLogs || [];
+        const searchLogs = globalThis.searchLogs || [];
+        
+        const stats = {
+          channelCreation: {
+            total: channelLogs.length,
+            success: channelLogs.filter((log: any) => log.status === 'success').length,
+            error: channelLogs.filter((log: any) => log.status === 'error').length
+          },
+          branding: {
+            total: brandingLogs.length
+          },
+          search: {
+            total: searchLogs.length
+          }
+        };
+        
+        return c.json(stats);
+      } catch (error: any) {
+        console.error('[LogAPI] 로그 통계 조회 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
+    // 로그 삭제
+    app.delete('/api/logs/:id/:type', async (c) => {
+      try {
+        const { id, type } = c.req.param();
+        
+        let logArray = null;
+        if (type === 'channel_creation') {
+          logArray = globalThis.channelCreationLogs || [];
+        } else if (type === 'branding') {
+          logArray = globalThis.brandingLogs || [];
+        } else if (type === 'search') {
+          logArray = globalThis.searchLogs || [];
+        } else {
+          return c.json({ error: '잘못된 로그 타입' }, 400);
+        }
+        
+        const index = logArray.findIndex((log: any) => log.id === id);
+        if (index !== -1) {
+          logArray.splice(index, 1);
+          console.log(`[LogAPI] 로그 삭제: ${id} (${type})`);
+          return c.json({ success: true, message: '로그가 삭제되었습니다' });
+        } else {
+          return c.json({ error: '로그를 찾을 수 없습니다' }, 404);
+        }
+      } catch (error: any) {
+        console.error('[LogAPI] 로그 삭제 오류:', error);
+        return c.json({ error: error.message || '서버 오류' }, 500);
+      }
+    });
+    
     // Basic MCP endpoint
     app.post('/mcp', async (c) => {
       try {

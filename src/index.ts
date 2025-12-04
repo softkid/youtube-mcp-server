@@ -4,6 +4,13 @@ import { z } from 'zod';
 import { YouTubeService } from './youtube-service.js';
 import { TranscriptOptions } from './types/youtube-types.js';
 
+// Global type augmentation for log storage
+declare global {
+  var channelCreationLogs: any[];
+  var brandingLogs: any[];
+  var searchLogs: any[];
+}
+
 // Configuration schema for Smithery
 export const configSchema = z.object({
   youtubeApiKey: z.string().describe("YouTube Data API v3 key"),

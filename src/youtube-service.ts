@@ -748,6 +748,30 @@ export class YouTubeService {
     }
   }
 
+  /**
+   * Get the authenticated user's YouTube channels.
+   * @param accessToken OAuth access token for the authenticated user
+   * @returns List of channels owned by the user
+   */
+  async getMyChannels(accessToken: string): Promise<youtube_v3.Schema$ChannelListResponse> {
+    try {
+      const youtubeAuth = google.youtube({
+        version: 'v3',
+        auth: accessToken // Use the user's OAuth token
+      });
+
+      const response = await youtubeAuth.channels.list({
+        part: ['snippet', 'statistics'],
+        mine: true // Only return channels owned by the authenticated user
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error getting user channels:', error);
+      throw error;
+    }
+  }
+
   private formatTimestamp(milliseconds: number): string {
     const totalSeconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(totalSeconds / 60);

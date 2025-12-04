@@ -1482,23 +1482,57 @@ const cloudflareWorker = {
       }
     });
 
+    // REST API: 사용자의 채널 목록 가져오기
+    app.post('/api/get-my-channels', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { accessToken } = body;
+
+        if (!accessToken) {
+          return c.json({ error: 'accessToken is required' }, 400);
+        }
+
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+
+        const response = await youtubeService.getMyChannels(accessToken);
+
+        const channels = response.items?.map(channel => ({
+          id: channel.id,
+          title: channel.snippet?.title,
+          description: channel.snippet?.description,
+          publishedAt: channel.snippet?.publishedAt,
+          thumbnail: channel.snippet?.thumbnails?.default?.url,
+          subscriberCount: parseInt(channel.statistics?.subscriberCount || '0'),
+          videoCount: parseInt(channel.statistics?.videoCount || '0'),
+          viewCount: parseInt(channel.statistics?.viewCount || '0')
+        })) || [];
+
+        return c.json({ channels });
+      } catch (error: any) {
+        console.error('Get my channels error:', error);
+        return c.json({ error: error.message || 'Internal server error' }, 500);
+      }
+    });
+
     // REST API: 세그먼트별 트랜스크립트 가져오기
     app.post('/api/get-segmented-transcript', async (c) => {
       try {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoId, segmentCount = 4 } = body;
-        
+
         if (!videoId) {
           return c.json({ error: 'videoId is required' }, 400);
         }
-          
+
           const segmentCountNum = typeof segmentCount === 'string' ? parseInt(segmentCount, 10) : segmentCount;
           const segmentedTranscript = await youtubeService.getSegmentedTranscript(videoId, segmentCountNum);
-          
+
         return c.json({
           videoId,
           text: segmentedTranscript.text || 'Failed to create segmented transcript',

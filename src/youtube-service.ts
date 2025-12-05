@@ -15,7 +15,7 @@ export class YouTubeService {
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.YOUTUBE_API_KEY || '';
-    
+
     if (!this.apiKey) {
       console.error('Warning: YouTube API key not provided');
       console.error('YouTube API functionality will be limited');
@@ -123,7 +123,7 @@ export class YouTubeService {
    */
   private countryToLanguage(countryCode?: string): string | null {
     if (!countryCode) return null;
-    
+
     // Note: Some countries have multiple languages, priority is set here
     const countryLangMap: Record<string, string> = {
       // Korean
@@ -166,7 +166,7 @@ export class YouTubeService {
       'CA': 'en', // Canada: English priority
       'CH': 'de', // Switzerland: German priority
     };
-    
+
     return countryLangMap[countryCode.toUpperCase()] || null;
   }
 
@@ -178,15 +178,15 @@ export class YouTubeService {
       // Get video details to find channel ID
       const videoData = await this.getVideoDetails(videoId);
       const channelId = videoData.items?.[0]?.snippet?.channelId;
-      
+
       if (!channelId) return null;
-      
+
       // Get channel details to find country
       const channelData = await this.getChannelDetails(channelId);
       const countryCode = channelData.items?.[0]?.snippet?.country;
-      
+
       if (!countryCode) return null;
-      
+
       // Convert country code to language code
       return this.countryToLanguage(countryCode);
     } catch (error) {
@@ -218,7 +218,7 @@ export class YouTubeService {
     // Fallback languages to try if the requested language fails
     const fallbackLanguages = ['en', 'ko', 'ja', 'es', 'fr', 'de', 'zh', 'pt', 'ru', 'it', 'ar', 'hi'];
     const languagesToTry: string[] = [];
-    
+
     if (options.language) {
       // If a specific language is requested, try it first
       languagesToTry.push(options.language);
@@ -227,7 +227,7 @@ export class YouTubeService {
     } else {
       // If no language is specified, try to detect from channel country
       const detectedLanguage = await this.detectLanguageFromChannel(videoId);
-      
+
       if (detectedLanguage) {
         // Try detected language first
         languagesToTry.push(detectedLanguage);
@@ -250,38 +250,38 @@ export class YouTubeService {
         scraperOptions.lang = lang;
 
         const captions = await getSubtitles(scraperOptions);
-        
+
         // If we got captions, cache and return them
         if (captions && captions.length > 0) {
           const cacheOptions = { ...options, language: lang };
           const cacheKeyWithLang = this.generateTranscriptCacheKey(videoId, cacheOptions);
           this.transcriptCache.set(cacheKeyWithLang, captions);
-          
+
           // Also cache with original options for consistency
           this.transcriptCache.set(cacheKey, captions);
-          
+
           return this.processTranscript(captions, options);
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         lastError = error instanceof Error ? error : new Error(errorMessage);
-        
+
         // Check if this is a "no captions" error (video has no captions at all)
         // This is different from "language not available" error
         // Pattern 1: "Could not find captions for video: [videoId]" (no language specified)
         // Pattern 2: "Could not find captions for [videoId]" (no language specified)
         const isNoCaptionsError = (
-          (errorMessage.includes('Could not find captions for video:') || 
-           errorMessage.includes('Could not find captions for ')) &&
+          (errorMessage.includes('Could not find captions for video:') ||
+            errorMessage.includes('Could not find captions for ')) &&
           !errorMessage.match(/Could not find \w+ captions for/)
         );
-        
+
         if (isNoCaptionsError) {
           hasNoCaptionsError = true;
           // If video has no captions at all, don't try other languages
           break;
         }
-        
+
         // For language-specific errors (e.g., "Could not find en captions"), continue trying other languages
         // Suppress verbose logging - only log in debug mode
         if (process.env.DEBUG_TRANSCRIPT === 'true' && i < languagesToTry.length - 1 && !hasNoCaptionsError && i < 2) {
@@ -292,7 +292,7 @@ export class YouTubeService {
 
     // If all languages failed, throw an error
     const errorMessage = lastError?.message || 'Unknown error';
-    
+
     if (hasNoCaptionsError) {
       // Video has no captions at all - only log once at debug level
       if (process.env.DEBUG_TRANSCRIPT === 'true') {
@@ -630,7 +630,7 @@ export class YouTubeService {
         segments: transcriptData,
         totalSegments: transcriptData.length,
         duration: (transcriptData[transcriptData.length - 1].offset +
-                 transcriptData[transcriptData.length - 1].duration) / 1000,
+          transcriptData[transcriptData.length - 1].duration) / 1000,
         format: 'timestamped',
         text: formattedText,
         metadata: video ? [{
@@ -768,58 +768,36 @@ export class YouTubeService {
         auth: oauth2Client,
       });
 
-      // First, get the authenticated user's channel to get the content owner ID
-      const myChannelResponse = await youtube.channels.list({
-        part: ['snippet', 'contentDetails', 'statistics'],
-        mine: true,
-        maxResults: 1,
-      });
+      console.log('[getMyChannels] Fetching channels with mine=true...');
 
-      const myChannel = myChannelResponse.data.items?.[0];
-      if (!myChannel) {
-        throw new Error('No channel found for the authenticated user');
-      }
-
-      // Get the content owner ID if available (for brand accounts)
-      const contentOwnerId = myChannel.contentOwnerDetails?.contentOwner;
-
-      // First, try to get channels using contentOwnerId if available (for brand accounts)
-      if (contentOwnerId) {
-        try {
-          const response = await youtube.channels.list({
-            part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
-            managedByMe: true,
-            onBehalfOfContentOwner: contentOwnerId,
-            maxResults,
-            pageToken,
-          });
-          
-          if (response.data.items && response.data.items.length > 0) {
-            return response.data;
-          }
-        } catch (error) {
-          console.warn('Failed to fetch channels with content owner, falling back to basic method:', error);
-        }
-      }
-
-      // Fallback to basic channel listing if no content owner or if the above fails
+      // Get all channels the user has access to (including brand accounts)
+      // Using mine=true will return ALL channels the user can access, including brand accounts
       const response = await youtube.channels.list({
-        part: ['snippet', 'statistics', 'contentDetails'],
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'status'],
         mine: true,
         maxResults,
         pageToken,
       });
 
-      // Log quota usage information if available
-      if (response.headers) {
-        console.log('YouTube API Quota:', {
-          quotaCost: response.headers['x-ratelimit-cost'],
-          quotaRemaining: response.headers['x-ratelimit-remaining'],
-          quotaLimit: response.headers['x-ratelimit-limit']
-        });
+      console.log('[getMyChannels] Response received:', {
+        itemCount: response.data.items?.length || 0,
+        totalResults: response.data.pageInfo?.totalResults,
+        resultsPerPage: response.data.pageInfo?.resultsPerPage
+      });
+
+      // If we got results, return them
+      if (response.data.items && response.data.items.length > 0) {
+        console.log('[getMyChannels] Channels found:', response.data.items.map(ch => ({
+          id: ch.id,
+          title: ch.snippet?.title,
+          customUrl: ch.snippet?.customUrl
+        })));
+
+        return response.data;
       }
 
-      return response.data;
+      // If no channels found, throw an error
+      throw new Error('No channels found for the authenticated user');
     } catch (error: any) {
       console.error('Error getting user channels:', {
         message: error.message,
@@ -827,14 +805,9 @@ export class YouTubeService {
         errors: error.errors,
         status: error.response?.status,
         statusText: error.response?.statusText,
-        headers: error.response?.headers,
-        config: {
-          method: error.config?.method,
-          url: error.config?.url,
-          params: error.config?.params
-        }
+        data: error.response?.data
       });
-      
+
       // Provide more specific error messages for common issues
       if (error.code === 401) {
         throw new Error('Authentication failed. The access token might be expired or invalid.');
@@ -845,7 +818,7 @@ export class YouTubeService {
       } else if (error.response?.data?.error) {
         throw new Error(`YouTube API error: ${JSON.stringify(error.response.data.error)}`);
       }
-      
+
       throw new Error(`Failed to fetch channels: ${error.message || 'Unknown error'}`);
     }
   }

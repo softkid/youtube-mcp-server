@@ -783,28 +783,32 @@ export class YouTubeService {
       // Get the content owner ID if available (for brand accounts)
       const contentOwnerId = myChannel.contentOwnerDetails?.contentOwner;
 
-      // Now get all channels including brand accounts
+      // First, try to get channels using contentOwnerId if available (for brand accounts)
+      if (contentOwnerId) {
+        try {
+          const response = await youtube.channels.list({
+            part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
+            managedByMe: true,
+            onBehalfOfContentOwner: contentOwnerId,
+            maxResults,
+            pageToken,
+          });
+          
+          if (response.data.items && response.data.items.length > 0) {
+            return response.data;
+          }
+        } catch (error) {
+          console.warn('Failed to fetch channels with content owner, falling back to basic method:', error);
+        }
+      }
+
+      // Fallback to basic channel listing if no content owner or if the above fails
       const response = await youtube.channels.list({
-        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
+        part: ['snippet', 'statistics', 'contentDetails'],
         mine: true,
-        managedByMe: true, // This includes brand accounts managed by the user
         maxResults,
         pageToken,
-        // Include brand accounts if content owner ID is available
-        ...(contentOwnerId && { onBehalfOfContentOwner: contentOwnerId }),
       });
-
-      // If no channels found with managedByMe, try without it (fallback)
-      if (!response.data.items || response.data.items.length === 0) {
-        const fallbackResponse = await youtube.channels.list({
-          part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
-          mine: true,
-          maxResults,
-          pageToken,
-          ...(contentOwnerId && { onBehalfOfContentOwner: contentOwnerId }),
-        });
-        return fallbackResponse.data;
-      }
 
       // Log quota usage information if available
       if (response.headers) {

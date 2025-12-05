@@ -91,6 +91,28 @@ export class YouTubeService {
     }
   }
 
+  /**
+   * Get channel details by handle (e.g., @channelname)
+   * @param handle Channel handle (with or without @ prefix)
+   * @returns Channel details
+   */
+  async getChannelByHandle(handle: string): Promise<youtube_v3.Schema$ChannelListResponse> {
+    try {
+      // Remove @ prefix if present
+      const cleanHandle = handle.startsWith('@') ? handle.substring(1) : handle;
+
+      const response = await this.youtube.channels.list({
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
+        forHandle: cleanHandle
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error getting channel by handle:', error);
+      throw error;
+    }
+  }
+
   async getComments(
     videoId: string,
     maxResults: number = 20,

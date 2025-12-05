@@ -895,7 +895,7 @@ Conclude with a brief overall summary that ties together the main themes across 
 
         // Define summary instructions based on length
         let summaryInstructions = '';
-        switch(finalSummaryLength) {
+        switch (finalSummaryLength) {
           case 'short':
             summaryInstructions = `Please provide a brief summary of this video in 3-5 sentences that captures the main idea.`;
             break;
@@ -959,8 +959,8 @@ ${summaryInstructions}`
 
 // Local development server setup
 // Check if this file is being run directly (not imported)
-const isMainModule = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || 
-                     process.argv[1]?.includes('index');
+const isMainModule = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` ||
+  process.argv[1]?.includes('index');
 
 // Initialize YouTube service (used by both MCP and HTTP server)
 let youtubeService: YouTubeService | null = null;
@@ -996,13 +996,13 @@ const cloudflareWorker = {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     const { Hono } = await import('hono');
     const app = new Hono();
-    
+
     // Initialize YouTube service if not already initialized
     if (!youtubeService) {
       const apiKey = env.YOUTUBE_API_KEY || '';
       youtubeService = new YouTubeService(apiKey);
     }
-    
+
     // CORS middleware - Cloudflare Access와 호환되도록 강화
     app.use('*', async (c, next) => {
       // CORS 헤더 설정
@@ -1011,16 +1011,16 @@ const cloudflareWorker = {
       c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, CF-Access-Client-Id, CF-Access-Client-Secret');
       c.header('Access-Control-Allow-Credentials', 'true');
       c.header('Access-Control-Max-Age', '86400'); // 24시간
-      
+
       // Cloudflare Access 헤더 확인 (선택적)
       const cfAccessClientId = c.req.header('CF-Access-Client-Id');
       const cfAccessClientSecret = c.req.header('CF-Access-Client-Secret');
-      
+
       // OPTIONS 프리플라이트 요청 처리
       if (c.req.method === 'OPTIONS') {
         return c.json({}, 200);
       }
-      
+
       // Cloudflare Access 인증이 필요한 경우를 위한 로깅 (디버깅용)
       if (process.env.DEBUG_ACCESS === 'true') {
         console.log('Request headers:', {
@@ -1030,55 +1030,55 @@ const cloudflareWorker = {
           'User-Agent': c.req.header('User-Agent')
         });
       }
-      
+
       await next();
-      
+
       // 응답에도 CORS 헤더 보장
       c.header('Access-Control-Allow-Origin', '*');
     });
-      
+
     // REST API: 비디오 검색
     app.post('/api/search-videos', async (c) => {
       try {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { query, maxResults = 50, channelId, order, type, videoDuration, publishedAfter, publishedBefore } = body;
-        
+
         if (!query) {
           return c.json({ error: 'query is required' }, 400);
         }
-          
-          const searchResults = await youtubeService.searchVideos(query, maxResults, {
-            channelId,
-            order: order || 'viewCount',
-            type: type || 'video',
-            videoDuration,
-            publishedAfter,
-            publishedBefore
-          });
-          
+
+        const searchResults = await youtubeService.searchVideos(query, maxResults, {
+          channelId,
+          order: order || 'viewCount',
+          type: type || 'video',
+          videoDuration,
+          publishedAfter,
+          publishedBefore
+        });
+
         // 비디오 상세 정보 가져오기
         const videoIds = searchResults.items?.map((item: any) => item.id.videoId).join(',') || '';
         if (!videoIds) {
           return c.json({ items: [] });
         }
-        
+
         const videoResponse = await youtubeService.getVideoDetails(videoIds);
         const videos = videoResponse.items || [];
-        
+
         // 채널 정보 가져오기
         const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))];
         const channelMap = new Map();
-        
+
         if (channelIds.length > 0) {
           const channelResponse = await youtubeService.youtube.channels.list({
             part: ['statistics', 'snippet'],
             id: channelIds
           });
-          
+
           channelResponse.data.items?.forEach((item: any) => {
             channelMap.set(item.id, {
               subscriberCount: parseInt(item.statistics?.subscriberCount || '0'),
@@ -1086,7 +1086,7 @@ const cloudflareWorker = {
             });
           });
         }
-        
+
         // 결과 변환
         const results = videos.map((video: any) => {
           const durationSeconds = parseISO8601Duration(video.contentDetails?.duration || 'PT0S');
@@ -1094,7 +1094,7 @@ const cloudflareWorker = {
           const subscriberCount = channelInfo.subscriberCount;
           const viewCount = parseInt(video.statistics?.viewCount || '0');
           const viewSubscriberRatio = subscriberCount > 0 ? viewCount / subscriberCount : 0;
-          
+
           return {
             id: video.id,
             title: video.snippet?.title,
@@ -1113,80 +1113,80 @@ const cloudflareWorker = {
             thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url
           };
         });
-        
+
         return c.json({ items: results });
       } catch (error: any) {
         console.error('Search error:', error);
         return c.json({ error: error.message || 'Internal server error' }, 500);
       }
     });
-      
+
     // REST API: 트렌딩 비디오 가져오기
     app.post('/api/get-trending-videos', async (c) => {
       try {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { regionCode = 'US', categoryId, maxResults = 10 } = body;
-          
-          const response = await youtubeService.youtube.videos.list({
-            part: ['snippet', 'contentDetails', 'statistics'],
-            chart: 'mostPopular',
-            regionCode,
-            videoCategoryId: categoryId,
-            maxResults
+
+        const response = await youtubeService.youtube.videos.list({
+          part: ['snippet', 'contentDetails', 'statistics'],
+          chart: 'mostPopular',
+          regionCode,
+          videoCategoryId: categoryId,
+          maxResults
+        });
+
+        // 비디오 상세 정보 가져오기
+        const videos = response.data.items || [];
+
+        // 채널 정보 가져오기
+        const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))];
+        const channelMap = new Map();
+
+        if (channelIds.length > 0) {
+          const channelResponse = await youtubeService.youtube.channels.list({
+            part: ['statistics', 'snippet'],
+            id: channelIds
           });
 
-          // 비디오 상세 정보 가져오기
-          const videos = response.data.items || [];
-          
-          // 채널 정보 가져오기
-          const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))];
-          const channelMap = new Map();
-          
-          if (channelIds.length > 0) {
-            const channelResponse = await youtubeService.youtube.channels.list({
-              part: ['statistics', 'snippet'],
-              id: channelIds
+          channelResponse.data.items?.forEach((item: any) => {
+            channelMap.set(item.id, {
+              subscriberCount: parseInt(item.statistics?.subscriberCount || '0'),
+              country: item.snippet?.country || null
             });
-            
-            channelResponse.data.items?.forEach((item: any) => {
-              channelMap.set(item.id, {
-                subscriberCount: parseInt(item.statistics?.subscriberCount || '0'),
-                country: item.snippet?.country || null
-              });
-            });
-          }
-          
-          // 결과 변환
-          const results = videos.map((video: any) => {
-            const durationSeconds = parseISO8601Duration(video.contentDetails?.duration || 'PT0S');
-            const channelInfo = channelMap.get(video.snippet?.channelId) || { subscriberCount: 0, country: null };
-            const subscriberCount = channelInfo.subscriberCount;
-            const viewCount = parseInt(video.statistics?.viewCount || '0');
-            const viewSubscriberRatio = subscriberCount > 0 ? viewCount / subscriberCount : 0;
-            
-            return {
-              id: video.id,
-              title: video.snippet?.title,
-              publishedAt: video.snippet?.publishedAt,
-              viewCount,
-              likeCount: parseInt(video.statistics?.likeCount || '0'),
-              channelTitle: video.snippet?.channelTitle,
-              channelId: video.snippet?.channelId,
-              channelCountry: channelInfo.country,
-              duration: formatDuration(durationSeconds),
-              durationSeconds,
-              subscriberCount,
-              viewSubscriberRatio,
-              description: video.snippet?.description,
-              tags: video.snippet?.tags || [],
-              thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url
-            };
           });
-          
+        }
+
+        // 결과 변환
+        const results = videos.map((video: any) => {
+          const durationSeconds = parseISO8601Duration(video.contentDetails?.duration || 'PT0S');
+          const channelInfo = channelMap.get(video.snippet?.channelId) || { subscriberCount: 0, country: null };
+          const subscriberCount = channelInfo.subscriberCount;
+          const viewCount = parseInt(video.statistics?.viewCount || '0');
+          const viewSubscriberRatio = subscriberCount > 0 ? viewCount / subscriberCount : 0;
+
+          return {
+            id: video.id,
+            title: video.snippet?.title,
+            publishedAt: video.snippet?.publishedAt,
+            viewCount,
+            likeCount: parseInt(video.statistics?.likeCount || '0'),
+            channelTitle: video.snippet?.channelTitle,
+            channelId: video.snippet?.channelId,
+            channelCountry: channelInfo.country,
+            duration: formatDuration(durationSeconds),
+            durationSeconds,
+            subscriberCount,
+            viewSubscriberRatio,
+            description: video.snippet?.description,
+            tags: video.snippet?.tags || [],
+            thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url
+          };
+        });
+
         return c.json({ items: results });
       } catch (error: any) {
         console.error('Trending videos error:', error);
@@ -1200,20 +1200,20 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { regionCode = 'US' } = body;
-          
-          const response = await youtubeService.youtube.videoCategories.list({
-            part: ['snippet'],
-            regionCode
-          });
 
-          const categories = response.data.items?.map(category => ({
-            id: category.id,
-            title: category.snippet?.title
-          })) || [];
-          
+        const response = await youtubeService.youtube.videoCategories.list({
+          part: ['snippet'],
+          regionCode
+        });
+
+        const categories = response.data.items?.map(category => ({
+          id: category.id,
+          title: category.snippet?.title
+        })) || [];
+
         return c.json({ categories });
       } catch (error: any) {
         console.error('Video categories error:', error);
@@ -1227,21 +1227,21 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { channelId } = body;
-        
+
         if (!channelId) {
           return c.json({ error: 'channelId is required' }, 400);
         }
-          
-          const channelData = await youtubeService.getChannelDetails(channelId);
-          const channel = channelData.items?.[0];
-          
+
+        const channelData = await youtubeService.getChannelDetails(channelId);
+        const channel = channelData.items?.[0];
+
         if (!channel) {
           return c.json({ error: 'Channel not found' }, 404);
         }
-        
+
         const stats = {
           channelId: channel.id,
           title: channel.snippet?.title,
@@ -1252,7 +1252,7 @@ const cloudflareWorker = {
           viewCount: parseInt(channel.statistics?.viewCount || '0'),
           thumbnailUrl: channel.snippet?.thumbnails?.default?.url || channel.snippet?.thumbnails?.medium?.url
         };
-        
+
         return c.json(stats);
       } catch (error: any) {
         console.error('Channel stats error:', error);
@@ -1266,26 +1266,26 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { channelId, maxResults = 10, sortBy = 'date' } = body;
-        
+
         if (!channelId) {
           return c.json({ error: 'channelId is required' }, 400);
         }
-          
-          // 채널의 비디오 목록 가져오기
-          const searchResponse = await youtubeService.youtube.search.list({
-            part: ['snippet'],
-            channelId,
-            maxResults,
-            order: sortBy,
-            type: ['video']
-          });
 
-          const videoIds: string[] = searchResponse.data.items
-            ?.map(item => item.id?.videoId)
-            .filter((id): id is string => id !== null && id !== undefined) || [];
+        // 채널의 비디오 목록 가져오기
+        const searchResponse = await youtubeService.youtube.search.list({
+          part: ['snippet'],
+          channelId,
+          maxResults,
+          order: sortBy,
+          type: ['video']
+        });
+
+        const videoIds: string[] = searchResponse.data.items
+          ?.map(item => item.id?.videoId)
+          .filter((id): id is string => id !== null && id !== undefined) || [];
 
         if (videoIds.length === 0) {
           return c.json({
@@ -1368,20 +1368,20 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoId, language } = body;
-        
+
         if (!videoId) {
           return c.json({ error: 'videoId is required' }, 400);
         }
-          
-          const transcriptData = await youtubeService.getTranscript(videoId, language);
-          
-          const formattedTranscript = transcriptData.map(caption =>
-            `[${formatTime(caption.offset)}] ${caption.text}`
-          ).join('\n');
-          
+
+        const transcriptData = await youtubeService.getTranscript(videoId, language);
+
+        const formattedTranscript = transcriptData.map(caption =>
+          `[${formatTime(caption.offset)}] ${caption.text}`
+        ).join('\n');
+
         return c.json({
           videoId,
           transcript: formattedTranscript,
@@ -1410,31 +1410,31 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoIds, language, format, includeMetadata, filters } = body;
-        
+
         if (!videoIds || !Array.isArray(videoIds) || videoIds.length === 0) {
           return c.json({ error: 'videoIds array is required' }, 400);
         }
-          
-          const options: any = {
-            language,
-            format,
-            includeMetadata,
-            timeRange: filters?.timeRange,
-            search: filters?.search
+
+        const options: any = {
+          language,
+          format,
+          includeMetadata,
+          timeRange: filters?.timeRange,
+          search: filters?.search
+        };
+
+        if (filters?.segment?.method && filters?.segment?.count) {
+          options.segment = {
+            method: filters.segment.method,
+            count: filters.segment.count
           };
-          
-          if (filters?.segment?.method && filters?.segment?.count) {
-            options.segment = {
-              method: filters.segment.method,
-              count: filters.segment.count
-            };
-          }
-          
-          const transcript = await youtubeService.getEnhancedTranscript(videoIds, options);
-          
+        }
+
+        const transcript = await youtubeService.getEnhancedTranscript(videoIds, options);
+
         return c.json(transcript);
       } catch (error: any) {
         // Only log in debug mode to reduce noise
@@ -1454,17 +1454,17 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoId, maxMoments = 5 } = body;
-        
+
         if (!videoId) {
           return c.json({ error: 'videoId is required' }, 400);
         }
-          
-          const maxMomentsNum = typeof maxMoments === 'string' ? parseInt(maxMoments, 10) : maxMoments;
-          const keyMomentsTranscript = await youtubeService.getKeyMomentsTranscript(videoId, maxMomentsNum);
-          
+
+        const maxMomentsNum = typeof maxMoments === 'string' ? parseInt(maxMoments, 10) : maxMoments;
+        const keyMomentsTranscript = await youtubeService.getKeyMomentsTranscript(videoId, maxMomentsNum);
+
         return c.json({
           videoId,
           text: keyMomentsTranscript.text || 'No key moments found',
@@ -1510,8 +1510,8 @@ const cloudflareWorker = {
           description: channel.snippet?.description,
           publishedAt: channel.snippet?.publishedAt,
           thumbnail: channel.snippet?.thumbnails?.default?.url ||
-                    channel.snippet?.thumbnails?.medium?.url ||
-                    channel.snippet?.thumbnails?.high?.url,
+            channel.snippet?.thumbnails?.medium?.url ||
+            channel.snippet?.thumbnails?.high?.url,
           subscriberCount: parseInt(channel.statistics?.subscriberCount || '0'),
           videoCount: parseInt(channel.statistics?.videoCount || '0'),
           viewCount: parseInt(channel.statistics?.viewCount || '0'),
@@ -1537,12 +1537,62 @@ const cloudflareWorker = {
         });
       } catch (error: any) {
         console.error('Get my channels error:', error);
-        
+
         // Return more detailed error information
         return c.json({
           error: error.message || 'Internal server error',
           code: error.code,
           details: error.errors
+        }, error.status || 500);
+      }
+    });
+
+    // REST API: 핸들명으로 채널 정보 가져오기
+    app.post('/api/get-channel-by-handle', async (c) => {
+      try {
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+
+        const body = await c.req.json();
+        const { handle } = body;
+
+        if (!handle) {
+          return c.json({ error: 'handle is required' }, 400);
+        }
+
+        const response = await youtubeService.getChannelByHandle(handle);
+
+        if (!response.items || response.items.length === 0) {
+          return c.json({ error: `Channel not found for handle: ${handle}` }, 404);
+        }
+
+        const channel = response.items[0];
+
+        return c.json({
+          channel: {
+            id: channel.id,
+            title: channel.snippet?.title,
+            description: channel.snippet?.description,
+            customUrl: channel.snippet?.customUrl,
+            publishedAt: channel.snippet?.publishedAt,
+            thumbnail: channel.snippet?.thumbnails?.default?.url ||
+              channel.snippet?.thumbnails?.medium?.url ||
+              channel.snippet?.thumbnails?.high?.url,
+            subscriberCount: parseInt(channel.statistics?.subscriberCount || '0'),
+            videoCount: parseInt(channel.statistics?.videoCount || '0'),
+            viewCount: parseInt(channel.statistics?.viewCount || '0'),
+            country: channel.snippet?.country,
+            defaultLanguage: channel.brandingSettings?.channel?.defaultLanguage,
+            keywords: channel.brandingSettings?.channel?.keywords,
+            uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads
+          }
+        });
+      } catch (error: any) {
+        console.error('Get channel by handle error:', error);
+        return c.json({
+          error: error.message || 'Internal server error',
+          code: error.code
         }, error.status || 500);
       }
     });
@@ -1561,8 +1611,8 @@ const cloudflareWorker = {
           return c.json({ error: 'videoId is required' }, 400);
         }
 
-          const segmentCountNum = typeof segmentCount === 'string' ? parseInt(segmentCount, 10) : segmentCount;
-          const segmentedTranscript = await youtubeService.getSegmentedTranscript(videoId, segmentCountNum);
+        const segmentCountNum = typeof segmentCount === 'string' ? parseInt(segmentCount, 10) : segmentCount;
+        const segmentedTranscript = await youtubeService.getSegmentedTranscript(videoId, segmentCountNum);
 
         return c.json({
           videoId,
@@ -1587,41 +1637,41 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoId, maxResults = 20, order = 'relevance', includeReplies = false, pageToken } = body;
-        
+
         if (!videoId) {
           return c.json({ error: 'videoId is required' }, 400);
         }
-          
-          const commentsData = await youtubeService.getComments(videoId, maxResults, {
-            order,
-            includeReplies,
-            pageToken
-          });
-          
-          // 댓글 데이터 변환
-          const comments = commentsData.items?.map(item => {
-            const comment = item.snippet?.topLevelComment?.snippet;
-            return {
-              id: item.id,
-              author: comment?.authorDisplayName,
-              authorChannelId: comment?.authorChannelId?.value,
-              text: comment?.textDisplay,
-              likeCount: parseInt(String(comment?.likeCount ?? '0'), 10),
-              publishedAt: comment?.publishedAt,
-              updatedAt: comment?.updatedAt,
-              replies: item.replies?.comments?.map(reply => ({
-                id: reply.id,
-                author: reply.snippet?.authorDisplayName,
-                text: reply.snippet?.textDisplay,
-                likeCount: parseInt(String(reply.snippet?.likeCount ?? '0'), 10),
-                publishedAt: reply.snippet?.publishedAt
-              })) || []
-            };
-          }) || [];
-          
+
+        const commentsData = await youtubeService.getComments(videoId, maxResults, {
+          order,
+          includeReplies,
+          pageToken
+        });
+
+        // 댓글 데이터 변환
+        const comments = commentsData.items?.map(item => {
+          const comment = item.snippet?.topLevelComment?.snippet;
+          return {
+            id: item.id,
+            author: comment?.authorDisplayName,
+            authorChannelId: comment?.authorChannelId?.value,
+            text: comment?.textDisplay,
+            likeCount: parseInt(String(comment?.likeCount ?? '0'), 10),
+            publishedAt: comment?.publishedAt,
+            updatedAt: comment?.updatedAt,
+            replies: item.replies?.comments?.map(reply => ({
+              id: reply.id,
+              author: reply.snippet?.authorDisplayName,
+              text: reply.snippet?.textDisplay,
+              likeCount: parseInt(String(reply.snippet?.likeCount ?? '0'), 10),
+              publishedAt: reply.snippet?.publishedAt
+            })) || []
+          };
+        }) || [];
+
         return c.json({
           videoId,
           totalResults: commentsData.pageInfo?.totalResults || 0,
@@ -1641,58 +1691,58 @@ const cloudflareWorker = {
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
-        
+
         const body = await c.req.json();
         const { videoId } = body;
-        
+
         if (!videoId) {
           return c.json({ error: 'videoId is required' }, 400);
         }
-          
-          // 비디오 상세 정보 가져오기
-          const videoData = await youtubeService.getVideoDetails(videoId);
-          const video = videoData.items?.[0];
-          
+
+        // 비디오 상세 정보 가져오기
+        const videoData = await youtubeService.getVideoDetails(videoId);
+        const video = videoData.items?.[0];
+
         if (!video) {
           return c.json({ error: 'Video not found' }, 404);
         }
-          
-          // 트랜스크립트 가져오기 (가능한 경우)
-          let transcriptText = '';
-          try {
-            const transcriptData = await youtubeService.getTranscript(videoId);
-            transcriptText = transcriptData.map(caption => caption.text).join(' ');
-          } catch (transcriptError) {
-            // 트랜스크립트가 없는 경우도 분석 가능하도록 계속 진행
-            // Only log in debug mode to reduce noise
-            if (process.env.DEBUG_TRANSCRIPT === 'true') {
-              console.log('[DEBUG] Transcript not available for video:', videoId);
-            }
+
+        // 트랜스크립트 가져오기 (가능한 경우)
+        let transcriptText = '';
+        try {
+          const transcriptData = await youtubeService.getTranscript(videoId);
+          transcriptText = transcriptData.map(caption => caption.text).join(' ');
+        } catch (transcriptError) {
+          // 트랜스크립트가 없는 경우도 분석 가능하도록 계속 진행
+          // Only log in debug mode to reduce noise
+          if (process.env.DEBUG_TRANSCRIPT === 'true') {
+            console.log('[DEBUG] Transcript not available for video:', videoId);
           }
-          
-          // 비디오 통계 정보
-          const statistics = {
-            viewCount: parseInt(video.statistics?.viewCount || '0'),
-            likeCount: parseInt(video.statistics?.likeCount || '0'),
-            commentCount: parseInt(video.statistics?.commentCount || '0'),
-            duration: video.contentDetails?.duration
-          };
-          
-          // 분석 데이터 구성
-          const analysisData = {
-            videoId: video.id,
-            title: video.snippet?.title,
-            channelTitle: video.snippet?.channelTitle,
-            publishedAt: video.snippet?.publishedAt,
-            description: video.snippet?.description,
-            statistics,
-            transcript: transcriptText,
-            tags: video.snippet?.tags || [],
-            thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url
-          };
-          
-          // 분석 메시지 생성 (video-analysis prompt와 동일한 형식)
-          const analysisPrompt = `Please analyze this YouTube video (ID: ${videoId}). Include information about the video's content, key points, and audience reception.
+        }
+
+        // 비디오 통계 정보
+        const statistics = {
+          viewCount: parseInt(video.statistics?.viewCount || '0'),
+          likeCount: parseInt(video.statistics?.likeCount || '0'),
+          commentCount: parseInt(video.statistics?.commentCount || '0'),
+          duration: video.contentDetails?.duration
+        };
+
+        // 분석 데이터 구성
+        const analysisData = {
+          videoId: video.id,
+          title: video.snippet?.title,
+          channelTitle: video.snippet?.channelTitle,
+          publishedAt: video.snippet?.publishedAt,
+          description: video.snippet?.description,
+          statistics,
+          transcript: transcriptText,
+          tags: video.snippet?.tags || [],
+          thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url
+        };
+
+        // 분석 메시지 생성 (video-analysis prompt와 동일한 형식)
+        const analysisPrompt = `Please analyze this YouTube video (ID: ${videoId}). Include information about the video's content, key points, and audience reception.
 
 Video Information:
 - Title: ${video.snippet?.title || 'Unknown'}
@@ -1702,7 +1752,7 @@ Video Information:
 - Likes: ${statistics.likeCount.toLocaleString()}
 - Comments: ${statistics.commentCount.toLocaleString()}
 ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not available)'}`;
-          
+
         return c.json({
           videoId: video.id,
           title: video.snippet?.title,
@@ -1715,27 +1765,27 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || 'Internal server error' }, 500);
       }
     });
-    
+
     // ===== 로그 관리 API 엔드포인트 =====
-    
+
     // 채널 생성 로그 저장
     app.post('/api/logs/channel-creation', async (c) => {
       try {
         const body = await c.req.json();
         const { id, timestamp, status, channelName, userEmail, details } = body;
-        
+
         if (!id || !timestamp || !status) {
           return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
         }
-        
+
         // 메모리에 로그 저장 (실제 환경에서는 데이터베이스 사용)
         if (!globalThis.channelCreationLogs) {
           globalThis.channelCreationLogs = [];
         }
-        
+
         const logEntry = { id, timestamp, status, channelName, userEmail, details };
         globalThis.channelCreationLogs.push(logEntry);
-        
+
         console.log(`[LogAPI] 채널 생성 로그 저장: ${channelName} (${status})`);
         return c.json({ success: true, id });
       } catch (error: any) {
@@ -1743,24 +1793,24 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 브랜딩 로그 저장
     app.post('/api/logs/branding', async (c) => {
       try {
         const body = await c.req.json();
         const { id, timestamp, topic, channelNames, tags, details } = body;
-        
+
         if (!id || !timestamp || !topic) {
           return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
         }
-        
+
         if (!globalThis.brandingLogs) {
           globalThis.brandingLogs = [];
         }
-        
+
         const logEntry = { id, timestamp, topic, channelNames, tags, details };
         globalThis.brandingLogs.push(logEntry);
-        
+
         console.log(`[LogAPI] 브랜딩 로그 저장: ${topic}`);
         return c.json({ success: true, id });
       } catch (error: any) {
@@ -1768,24 +1818,24 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 검색 로그 저장
     app.post('/api/logs/search', async (c) => {
       try {
         const body = await c.req.json();
         const { id, timestamp, searchQuery, resultCount, details } = body;
-        
+
         if (!id || !timestamp || !searchQuery) {
           return c.json({ error: '필수 필드가 누락되었습니다' }, 400);
         }
-        
+
         if (!globalThis.searchLogs) {
           globalThis.searchLogs = [];
         }
-        
+
         const logEntry = { id, timestamp, searchQuery, resultCount, details };
         globalThis.searchLogs.push(logEntry);
-        
+
         console.log(`[LogAPI] 검색 로그 저장: ${searchQuery}`);
         return c.json({ success: true, id });
       } catch (error: any) {
@@ -1793,7 +1843,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 채널 생성 로그 조회
     app.get('/api/logs/channel-creation', async (c) => {
       try {
@@ -1801,20 +1851,20 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         const userEmail = c.req.query('userEmail');
         const limit = parseInt(c.req.query('limit') || '100');
         const offset = parseInt(c.req.query('offset') || '0');
-        
+
         let logs = globalThis.channelCreationLogs || [];
-        
+
         if (status) {
           logs = logs.filter((log: any) => log.status === status);
         }
-        
+
         if (userEmail) {
           logs = logs.filter((log: any) => log.userEmail === userEmail);
         }
-        
+
         // 최신순으로 정렬
         logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
+
         const paginated = logs.slice(offset, offset + limit);
         return c.json({ logs: paginated, count: paginated.length });
       } catch (error: any) {
@@ -1822,22 +1872,22 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 브랜딩 로그 조회
     app.get('/api/logs/branding', async (c) => {
       try {
         const topic = c.req.query('topic');
         const limit = parseInt(c.req.query('limit') || '100');
         const offset = parseInt(c.req.query('offset') || '0');
-        
+
         let logs = globalThis.brandingLogs || [];
-        
+
         if (topic) {
           logs = logs.filter((log: any) => log.topic.includes(topic));
         }
-        
+
         logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
+
         const paginated = logs.slice(offset, offset + limit);
         return c.json({ logs: paginated, count: paginated.length });
       } catch (error: any) {
@@ -1845,22 +1895,22 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 검색 로그 조회
     app.get('/api/logs/search', async (c) => {
       try {
         const query = c.req.query('query');
         const limit = parseInt(c.req.query('limit') || '100');
         const offset = parseInt(c.req.query('offset') || '0');
-        
+
         let logs = globalThis.searchLogs || [];
-        
+
         if (query) {
           logs = logs.filter((log: any) => log.searchQuery.includes(query));
         }
-        
+
         logs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
+
         const paginated = logs.slice(offset, offset + limit);
         return c.json({ logs: paginated, count: paginated.length });
       } catch (error: any) {
@@ -1868,22 +1918,22 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 모든 로그 조회
     app.get('/api/logs/all', async (c) => {
       try {
         const limit = parseInt(c.req.query('limit') || '100');
         const offset = parseInt(c.req.query('offset') || '0');
-        
+
         const channelLogs = (globalThis.channelCreationLogs || []).map((log: any) => ({ ...log, type: 'channel_creation' }));
         const brandingLogs = (globalThis.brandingLogs || []).map((log: any) => ({ ...log, type: 'branding' }));
         const searchLogs = (globalThis.searchLogs || []).map((log: any) => ({ ...log, type: 'search' }));
-        
+
         const allLogs = [...channelLogs, ...brandingLogs, ...searchLogs];
-        
+
         // 최신순으로 정렬
         allLogs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
+
         const paginated = allLogs.slice(offset, offset + limit);
         return c.json({ logs: paginated, total: allLogs.length, count: paginated.length });
       } catch (error: any) {
@@ -1891,14 +1941,14 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 로그 통계
     app.get('/api/logs/statistics', async (c) => {
       try {
         const channelLogs = globalThis.channelCreationLogs || [];
         const brandingLogs = globalThis.brandingLogs || [];
         const searchLogs = globalThis.searchLogs || [];
-        
+
         const stats = {
           channelCreation: {
             total: channelLogs.length,
@@ -1912,19 +1962,19 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
             total: searchLogs.length
           }
         };
-        
+
         return c.json(stats);
       } catch (error: any) {
         console.error('[LogAPI] 로그 통계 조회 오류:', error);
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // 로그 삭제
     app.delete('/api/logs/:id/:type', async (c) => {
       try {
         const { id, type } = c.req.param();
-        
+
         let logArray = null;
         if (type === 'channel_creation') {
           logArray = globalThis.channelCreationLogs || [];
@@ -1935,7 +1985,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         } else {
           return c.json({ error: '잘못된 로그 타입' }, 400);
         }
-        
+
         const index = logArray.findIndex((log: any) => log.id === id);
         if (index !== -1) {
           logArray.splice(index, 1);
@@ -1949,7 +1999,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: error.message || '서버 오류' }, 500);
       }
     });
-    
+
     // Basic MCP endpoint
     app.post('/mcp', async (c) => {
       try {
@@ -1958,11 +2008,11 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         return c.json({ error: String(error) }, 500);
       }
     });
-    
+
     app.get('/health', (c) => {
       return c.json({ status: 'ok' });
     });
-    
+
     // 에러 핸들러 - 모든 에러 응답에 CORS 헤더 추가
     app.onError((err, c) => {
       console.error('Error:', err);
@@ -1970,12 +2020,12 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
       c.header('Access-Control-Allow-Origin', '*');
       c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      return c.json({ 
+      return c.json({
         error: err.message || 'Internal Server Error',
         status: 500
       }, 500);
     });
-    
+
     // 404 핸들러
     app.notFound((c) => {
       c.header('Access-Control-Allow-Origin', '*');
@@ -1983,7 +2033,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
       c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       return c.json({ error: 'Not Found', status: 404 }, 404);
     });
-    
+
     return app.fetch(request);
   }
 };
@@ -2000,18 +2050,18 @@ if (isMainModule) {
     try {
       const dotenv = await import('dotenv');
       dotenv.default.config();
-      
+
       const { serve } = await import('@hono/node-server');
       const port = process.env.PORT || 3000;
-      
+
       // Initialize YouTube service for local development
       const config = {
         youtubeApiKey: process.env.YOUTUBE_API_KEY || '',
         port: String(port)
       };
-      
+
       youtubeService = new YouTubeService(config.youtubeApiKey);
-      
+
       // Use the cloudflare worker's fetch handler for local development
       const handler = {
         fetch: async (request: Request) => {
@@ -2020,7 +2070,7 @@ if (isMainModule) {
           return cloudflareWorker.fetch(request, mockEnv, {} as ExecutionContext);
         }
       };
-      
+
       serve({
         fetch: handler.fetch,
         port: Number(port)

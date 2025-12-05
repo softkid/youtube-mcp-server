@@ -1482,11 +1482,11 @@ const cloudflareWorker = {
       }
     });
 
-    // REST API: 사용자의 채널 목록 가져오기
+    // REST API: 사용자의 채널 목록 가져오기 (with pagination support)
     app.post('/api/get-my-channels', async (c) => {
       try {
         const body = await c.req.json();
-        const { accessToken } = body;
+        const { accessToken, maxResults, pageToken } = body;
 
         if (!accessToken) {
           return c.json({ error: 'accessToken is required' }, 400);
@@ -1496,23 +1496,54 @@ const cloudflareWorker = {
           return c.json({ error: 'YouTube service not initialized' }, 500);
         }
 
-        const response = await youtubeService.getMyChannels(accessToken);
+        // Get channels with pagination support
+        const response = await youtubeService.getMyChannels(
+          accessToken,
+          maxResults || 50,  // Default to 50 if not specified
+          pageToken         // Can be undefined
+        );
 
+        // Map the response to include pagination info
         const channels = response.items?.map(channel => ({
           id: channel.id,
           title: channel.snippet?.title,
           description: channel.snippet?.description,
           publishedAt: channel.snippet?.publishedAt,
-          thumbnail: channel.snippet?.thumbnails?.default?.url,
+          thumbnail: channel.snippet?.thumbnails?.default?.url ||
+                    channel.snippet?.thumbnails?.medium?.url ||
+                    channel.snippet?.thumbnails?.high?.url,
           subscriberCount: parseInt(channel.statistics?.subscriberCount || '0'),
           videoCount: parseInt(channel.statistics?.videoCount || '0'),
-          viewCount: parseInt(channel.statistics?.viewCount || '0')
+          viewCount: parseInt(channel.statistics?.viewCount || '0'),
+          // Include additional fields that might be useful
+          customUrl: channel.snippet?.customUrl,
+          country: channel.snippet?.country,
+          defaultLanguage: channel.brandingSettings?.channel?.defaultLanguage,
+          keywords: channel.brandingSettings?.channel?.keywords,
+          privacyStatus: channel.status?.privacyStatus,
+          isLinked: channel.status?.isLinked,
+          uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads
         })) || [];
 
-        return c.json({ channels });
+        // Return the response with pagination info
+        return c.json({
+          channels,
+          pageInfo: {
+            totalResults: response.pageInfo?.totalResults,
+            resultsPerPage: response.pageInfo?.resultsPerPage,
+            nextPageToken: response.nextPageToken,
+            prevPageToken: response.prevPageToken
+          }
+        });
       } catch (error: any) {
         console.error('Get my channels error:', error);
-        return c.json({ error: error.message || 'Internal server error' }, 500);
+        
+        // Return more detailed error information
+        return c.json({
+          error: error.message || 'Internal server error',
+          code: error.code,
+          details: error.errors
+        }, error.status || 500);
       }
     });
 

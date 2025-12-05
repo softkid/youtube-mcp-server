@@ -753,8 +753,20 @@ export class YouTubeService {
    * @param accessToken OAuth access token for the authenticated user
    * @returns List of channels owned by the user
    */
-  async getMyChannels(accessToken: string): Promise<youtube_v3.Schema$ChannelListResponse> {
+  /**
+   * Fetches the authenticated user's YouTube channels with pagination support
+   * @param accessToken OAuth2 access token
+   * @param maxResults Maximum number of channels to return (1-50, default: 50)
+   * @param pageToken Token for pagination
+   * @returns Promise with channel list response
+   */
+  async getMyChannels(accessToken: string, maxResults: number = 50, pageToken?: string): Promise<youtube_v3.Schema$ChannelListResponse> {
     try {
+      // Validate maxResults parameter
+      if (maxResults < 1 || maxResults > 50) {
+        throw new Error('maxResults must be between 1 and 50');
+      }
+
       // Create an OAuth2 client with the access token
       const oauth2Client = new google.auth.OAuth2();
       oauth2Client.setCredentials({ 
@@ -767,23 +779,71 @@ export class YouTubeService {
       // Create YouTube client with OAuth2
       const youtube = google.youtube({
         version: 'v3',
-        auth: oauth2Client
+        auth: oauth2Client,
+        // Add retry configuration for better reliability
+        retry: true,
+        retryConfig: {
+          retry: 3,
+          retryDelay: 1000,
+          httpMethodsToRetry: ['GET', 'POST', 'PUT', 'DELETE'],
+          statusCodesToRetry: [[100, 199], [429, 429], [500, 599]]
+        }
       });
 
+      console.log(`Fetching channels (maxResults: ${maxResults}${pageToken ? ', pageToken: ' + pageToken : ''})`);
+      
       // Get the authenticated user's channels
       const response = await youtube.channels.list({
-        part: ['snippet', 'statistics'],
-        mine: true // Only return channels owned by the authenticated user
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
+        mine: true, // Only return channels owned by the authenticated user
+        maxResults: maxResults,
+        pageToken: pageToken,
+        // Optional: Uncomment and set if you need to act on behalf of a content owner
+        // onBehalfOfContentOwner: 'CONTENT_OWNER_ID',
+        // onBehalfOfContentOwnerChannel: 'CHANNEL_ID'
       });
 
       if (!response.data) {
         throw new Error('No data returned from YouTube API');
       }
 
+      // Log quota usage information if available
+      if (response.headers) {
+        console.log('YouTube API Quota:', {
+          quotaCost: response.headers['x-ratelimit-cost'],
+          quotaRemaining: response.headers['x-ratelimit-remaining'],
+          quotaLimit: response.headers['x-ratelimit-limit']
+        });
+      }
+
       return response.data;
-    } catch (error) {
-      console.error('Error getting user channels:', error);
-      throw new Error('Failed to fetch channels. Please check your access token and try again.');
+    } catch (error: any) {
+      console.error('Error getting user channels:', {
+        message: error.message,
+        code: error.code,
+        errors: error.errors,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        headers: error.response?.headers,
+        config: {
+          method: error.config?.method,
+          url: error.config?.url,
+          params: error.config?.params
+        }
+      });
+      
+      // Provide more specific error messages for common issues
+      if (error.code === 401) {
+        throw new Error('Authentication failed. The access token might be expired or invalid.');
+      } else if (error.code === 403) {
+        throw new Error('Insufficient permissions. Make sure the YouTube Data API v3 is enabled and the correct OAuth scopes are requested.');
+      } else if (error.code === 429) {
+        throw new Error('Rate limit exceeded. Please try again later.');
+      } else if (error.response?.data?.error) {
+        throw new Error(`YouTube API error: ${JSON.stringify(error.response.data.error)}`);
+      }
+      
+      throw new Error(`Failed to fetch channels: ${error.message || 'Unknown error'}`);
     }
   }
 

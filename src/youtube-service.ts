@@ -1,7 +1,15 @@
 import Database from 'better-sqlite3';
 import { exec } from 'child_process';
 import { readFileSync } from 'fs';
-import { youtube_v3 } from 'googleapis';
+import { google, youtube_v3 } from 'googleapis';
+import { 
+  VideoItem, 
+  ChannelItem, 
+  VideoListResponse, 
+  ChannelListResponse,
+  CommentThreadListResponse,
+  SearchListResponse
+} from './types/youtube-types';
 
 export class DatabaseInitializer {
   private db: InstanceType<typeof Database>;
@@ -41,29 +49,101 @@ export class DatabaseInitializer {
 
 export class YouTubeService {
   private dbInitializer: DatabaseInitializer;
-  private youtubeApi: any;
+  private youtube: youtube_v3.Youtube;
   private apiKey: string;
+  private youtubeApi: {
+    videos: {
+      list: (params: youtube_v3.Params$Resource$Videos$List) => Promise<{ data: VideoListResponse }>;
+    };
+    channels: {
+      list: (params: youtube_v3.Params$Resource$Channels$List) => Promise<{ data: ChannelListResponse }>;
+    };
+    commentThreads: {
+      list: (params: youtube_v3.Params$Resource$Commentthreads$List) => Promise<{ data: CommentThreadListResponse }>;
+    };
+    search: {
+      list: (params: youtube_v3.Params$Resource$Search$List) => Promise<{ data: SearchListResponse }>;
+    };
+    videoCategories: {
+      list: (params: youtube_v3.Params$Resource$Videocategories$List) => Promise<any>;
+    };
+  };
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
     this.dbInitializer = new DatabaseInitializer();
+    
+    // Initialize the YouTube client
+    this.youtube = google.youtube({
+      version: 'v3',
+      auth: this.apiKey
+    });
+    
+    // Mock implementation for testing
     this.youtubeApi = {
       videos: {
-         list: async (params: youtube_v3.Params$Resource$Videos$List) => {
-      // Mock implementation for testing
-      return { data: { items: [] } };
+        list: async (params: youtube_v3.Params$Resource$Videos$List) => {
+          // Mock implementation for testing
+          return { 
+            data: { 
+              kind: 'youtube#videoListResponse',
+              etag: '',
+              items: [],
+              pageInfo: { totalResults: 0, resultsPerPage: 0 }
+            } as VideoListResponse 
+          };
         }
       },
       channels: {
-         list: async (params: youtube_v3.Params$Resource$Channels$List) => {
-      // Mock implementation for testing
-      return { data: { items: [] } };
+        list: async (params: youtube_v3.Params$Resource$Channels$List) => {
+          // Mock implementation for testing
+          return { 
+            data: { 
+              kind: 'youtube#channelListResponse',
+              etag: '',
+              items: [],
+              pageInfo: { totalResults: 0, resultsPerPage: 0 }
+            } as ChannelListResponse 
+          };
+        }
+      },
+      commentThreads: {
+        list: async (params: youtube_v3.Params$Resource$Commentthreads$List) => {
+          // Mock implementation for testing
+          return { 
+            data: { 
+              kind: 'youtube#commentThreadListResponse',
+              etag: '',
+              items: [],
+              pageInfo: { totalResults: 0, resultsPerPage: 0 }
+            } as CommentThreadListResponse 
+          };
+        }
+      },
+      search: {
+        list: async (params: youtube_v3.Params$Resource$Search$List) => {
+          // Mock implementation for testing
+          return { 
+            data: { 
+              kind: 'youtube#searchListResponse',
+              etag: '',
+              regionCode: '',
+              items: [],
+              pageInfo: { totalResults: 0, resultsPerPage: 0 }
+            } as SearchListResponse 
+          };
         }
       },
       videoCategories: {
         list: async (params: youtube_v3.Params$Resource$Videocategories$List) => {
           // Mock implementation for testing
-          return { data: { items: [] } };
+          return { 
+            data: { 
+              kind: 'youtube#videoCategoryListResponse',
+              etag: '',
+              items: []
+            } 
+          };
         }
       }
     };
@@ -75,15 +155,31 @@ export class YouTubeService {
     console.log('Database initialized');
   }
 
-  // Mock methods for testing
-  async getVideoDetails(videoId: string) {
-    // Mock data
-    return { items: [{ id: videoId, snippet: { title: 'Test Video', channelId: 'UC1234567890' } }] };
+  // Get video details
+  async getVideoDetails(videoId: string): Promise<VideoItem> {
+    const response = await this.youtube.videos.list({
+      part: ['snippet', 'contentDetails', 'statistics', 'status'],
+      id: [videoId]
+    });
+    
+    if (!response.data.items || response.data.items.length === 0) {
+      throw new Error(`Video with ID ${videoId} not found`);
+    }
+    
+    return  response.data.items[0] as VideoItem & { kind: string };
   }
 
-  async getChannelDetails(channelId: string) {
-    // Mock data
-    return { items: [{ id: channelId, snippet: { title: 'Test Channel', publishedAt: '2023-01-01T00:00:00Z' } }] };
+  async getChannelDetails(channelId: string): Promise<ChannelItem> {
+    const response = await this.youtube.channels.list({
+      part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
+      id: [channelId]
+    });
+    
+    if (!response.data.items || response.data.items.length === 0) {
+      throw new Error(`Channel with ID ${channelId} not found`);
+    }
+    
+    return  response.data.items[0] as ChannelItem & { kind: string };
   }
 
   async getTranscript(videoId: string, language?: string) {

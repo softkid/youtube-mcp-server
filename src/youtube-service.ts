@@ -1,4 +1,4 @@
-import { google, youtube_v3 } from 'googleapis';
+import { google, youtube_v3, Auth } from 'googleapis';
 import dotenv from 'dotenv';
 import { getSubtitles } from 'youtube-captions-scraper';
 import NodeCache from 'node-cache';
@@ -755,20 +755,35 @@ export class YouTubeService {
    */
   async getMyChannels(accessToken: string): Promise<youtube_v3.Schema$ChannelListResponse> {
     try {
-      const youtubeAuth = google.youtube({
-        version: 'v3',
-        auth: accessToken // Use the user's OAuth token
+      // Create an OAuth2 client with the access token
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({ 
+        access_token: accessToken,
+        // Include these additional fields if available in your token response
+        // refresh_token: refreshToken,
+        // expiry_date: expiryDate
       });
 
-      const response = await youtubeAuth.channels.list({
+      // Create YouTube client with OAuth2
+      const youtube = google.youtube({
+        version: 'v3',
+        auth: oauth2Client
+      });
+
+      // Get the authenticated user's channels
+      const response = await youtube.channels.list({
         part: ['snippet', 'statistics'],
         mine: true // Only return channels owned by the authenticated user
       });
 
+      if (!response.data) {
+        throw new Error('No data returned from YouTube API');
+      }
+
       return response.data;
     } catch (error) {
       console.error('Error getting user channels:', error);
-      throw error;
+      throw new Error('Failed to fetch channels. Please check your access token and try again.');
     }
   }
 

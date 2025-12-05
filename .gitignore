@@ -47,6 +47,11 @@ Desktop.ini
 *.swp
 *.swo
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # Cursor
 .cursor
 

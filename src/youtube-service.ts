@@ -749,62 +749,61 @@ export class YouTubeService {
   }
 
   /**
-   * Get the authenticated user's YouTube channels.
-   * @param accessToken OAuth access token for the authenticated user
-   * @returns List of channels owned by the user
-   */
-  /**
-   * Fetches the authenticated user's YouTube channels with pagination support
+   * Fetches the authenticated user's YouTube channels including brand accounts
    * @param accessToken OAuth2 access token
    * @param maxResults Maximum number of channels to return (1-50, default: 50)
    * @param pageToken Token for pagination
-   * @returns Promise with channel list response
+   * @returns List of channels including brand accounts
    */
-  async getMyChannels(accessToken: string, maxResults: number = 50, pageToken?: string): Promise<youtube_v3.Schema$ChannelListResponse> {
+  async getMyChannels(accessToken: string, maxResults = 50, pageToken?: string): Promise<youtube_v3.Schema$ChannelListResponse> {
     try {
-      // Validate maxResults parameter
-      if (maxResults < 1 || maxResults > 50) {
-        throw new Error('maxResults must be between 1 and 50');
-      }
-
-      // Create an OAuth2 client with the access token
+      // Create OAuth2 client with the provided access token
       const oauth2Client = new google.auth.OAuth2();
-      oauth2Client.setCredentials({ 
+      oauth2Client.setCredentials({
         access_token: accessToken,
-        // Include these additional fields if available in your token response
-        // refresh_token: refreshToken,
-        // expiry_date: expiryDate
       });
 
-      // Create YouTube client with OAuth2
       const youtube = google.youtube({
         version: 'v3',
         auth: oauth2Client,
-        // Add retry configuration for better reliability
-        retry: true,
-        retryConfig: {
-          retry: 3,
-          retryDelay: 1000,
-          httpMethodsToRetry: ['GET', 'POST', 'PUT', 'DELETE'],
-          statusCodesToRetry: [[100, 199], [429, 429], [500, 599]]
-        }
       });
 
-      console.log(`Fetching channels (maxResults: ${maxResults}${pageToken ? ', pageToken: ' + pageToken : ''})`);
-      
-      // Get the authenticated user's channels
+      // First, get the authenticated user's channel to get the content owner ID
+      const myChannelResponse = await youtube.channels.list({
+        part: ['snippet', 'contentDetails', 'statistics'],
+        mine: true,
+        maxResults: 1,
+      });
+
+      const myChannel = myChannelResponse.data.items?.[0];
+      if (!myChannel) {
+        throw new Error('No channel found for the authenticated user');
+      }
+
+      // Get the content owner ID if available (for brand accounts)
+      const contentOwnerId = myChannel.contentOwnerDetails?.contentOwner;
+
+      // Now get all channels including brand accounts
       const response = await youtube.channels.list({
-        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
-        mine: true, // Only return channels owned by the authenticated user
-        maxResults: maxResults,
-        pageToken: pageToken,
-        // Optional: Uncomment and set if you need to act on behalf of a content owner
-        // onBehalfOfContentOwner: 'CONTENT_OWNER_ID',
-        // onBehalfOfContentOwnerChannel: 'CHANNEL_ID'
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
+        mine: true,
+        managedByMe: true, // This includes brand accounts managed by the user
+        maxResults,
+        pageToken,
+        // Include brand accounts if content owner ID is available
+        ...(contentOwnerId && { onBehalfOfContentOwner: contentOwnerId }),
       });
 
-      if (!response.data) {
-        throw new Error('No data returned from YouTube API');
+      // If no channels found with managedByMe, try without it (fallback)
+      if (!response.data.items || response.data.items.length === 0) {
+        const fallbackResponse = await youtube.channels.list({
+          part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'contentOwnerDetails'],
+          mine: true,
+          maxResults,
+          pageToken,
+          ...(contentOwnerId && { onBehalfOfContentOwner: contentOwnerId }),
+        });
+        return fallbackResponse.data;
       }
 
       // Log quota usage information if available

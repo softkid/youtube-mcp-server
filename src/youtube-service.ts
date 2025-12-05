@@ -768,14 +768,15 @@ export class YouTubeService {
         auth: oauth2Client,
       });
 
-      console.log('[getMyChannels] Fetching channels with managedByMe=true...');
+      console.log('[getMyChannels] Fetching channels with mine=true...');
 
-      // Get all channels the user manages (including brand accounts)
-      // Using managedByMe=true will return ALL channels the user can manage, including brand accounts
-      // This is different from mine=true which only returns the user's default channel
+      // Get the user's channel
+      // Note: managedByMe=true would return all managed channels including brand accounts,
+      // but requires additional OAuth scopes and Google verification.
+      // Using mine=true for now until OAuth scope is approved.
       const response = await youtube.channels.list({
         part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'status'],
-        managedByMe: true,
+        mine: true,
         maxResults,
         pageToken,
       });

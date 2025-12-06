@@ -1,12 +1,10 @@
-// Add CORS middleware
-app.use('/*', cors({
-  origin: '*', // Allow all origins
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'Upgrade-Insecure-Requests'],
-  exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
-  maxAge: 600,
-  credentials: true,
-}));
+#!/usr/bin/env node
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { YouTubeService } from './youtube-service.js';
+import { TranscriptOptions } from './types/youtube-types.js';
 
 // Global type augmentation for log storage
 declare global {

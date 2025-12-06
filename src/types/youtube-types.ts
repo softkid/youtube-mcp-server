@@ -143,6 +143,11 @@ export interface ChannelItem {
       country: string;
     };
   };
+  status?: {
+    privacyStatus: string;
+    isLinked: boolean;
+    longUploadsStatus: string;
+  };
 }
 
 export interface VideoListResponse {

@@ -68,30 +68,22 @@ export class YouTubeService {
   }
 
   // Get video details
-  async getVideoDetails(videoId: string): Promise<VideoItem> {
+  async getVideoDetails(videoIds: string): Promise<VideoListResponse> {
     const response = await this.youtube.videos.list({
       part: ['snippet', 'contentDetails', 'statistics', 'status'],
-      id: [videoId]
+      id: videoIds.split(',')
     });
 
-    if (!response.data.items || response.data.items.length === 0) {
-      throw new Error(`Video with ID ${videoId} not found`);
-    }
-
-    return response.data.items[0] as VideoItem;
+    return response.data as VideoListResponse;
   }
 
-  async getChannelDetails(channelId: string): Promise<ChannelItem> {
+  async getChannelDetails(channelId: string): Promise<ChannelListResponse> {
     const response = await this.youtube.channels.list({
-      part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
+      part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'status'],
       id: [channelId]
     });
 
-    if (!response.data.items || response.data.items.length === 0) {
-      throw new Error(`Channel with ID ${channelId} not found`);
-    }
-
-    return response.data.items[0] as ChannelItem;
+    return response.data as ChannelListResponse;
   }
 
   async getTranscript(videoId: string, language?: string) {

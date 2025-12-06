@@ -1,5 +1,3 @@
-import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
 import { google, youtube_v3 } from 'googleapis';
 import {
   VideoItem,
@@ -10,50 +8,12 @@ import {
   SearchListResponse
 } from './types/youtube-types.js';
 
-export class DatabaseInitializer {
-  private db: InstanceType<typeof Database>;
-
-  constructor() {
-    this.db = new Database('youtube.db', { verbose: console.log });
-  }
-
-  async initializeDatabase() {
-    try {
-      // Read schema.sql file
-      const schema = readFileSync('src/schema.sql', 'utf8');
-
-      // Execute SQL commands
-      const commands = schema.split(';').filter(cmd => cmd.trim() !== '');
-      for (const command of commands) {
-        if (command.trim().startsWith('DROP')) {
-          // DROP TABLE commands are idempotent, so we can safely execute them
-          this.db.exec(command);
-        } else {
-          // For CREATE TABLE, we need to ensure the command is valid SQLite
-          this.db.exec(command);
-        }
-      }
-      console.log('Database schema initialized successfully!');
-      return true;
-    } catch (error) {
-      console.error('Database initialization error:', error);
-      throw error;
-    }
-  }
-
-  close() {
-    this.db.close();
-  }
-}
-
 export class YouTubeService {
-  private dbInitializer: DatabaseInitializer;
   public youtube: youtube_v3.Youtube; // Made public for access in index.ts
   private apiKey: string;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.dbInitializer = new DatabaseInitializer();
 
     // Initialize the YouTube client
     this.youtube = google.youtube({
@@ -63,9 +23,10 @@ export class YouTubeService {
   }
 
   async initialize() {
-    await this.dbInitializer.initializeDatabase();
-    console.log('Database initialized');
+    // Database initialization is handled by Cloudflare D1
+    console.log('YouTube Service initialized');
   }
+
 
   // Get video details
   async getVideoDetails(videoIds: string): Promise<VideoListResponse> {

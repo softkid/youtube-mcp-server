@@ -1935,28 +1935,73 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const cleanHandle = handle.startsWith('@') ? handle.substring(1) : handle;
-
-        const existingChannel = await env.DB.prepare(
-          'SELECT id FROM Channels WHERE user_id = ? AND handle = ?'
-        ).bind(userId, cleanHandle).first();
-
-        if (existingChannel) {
-          return c.json({ error: 'Channel already added' }, 400);
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
         }
 
-        const channelId = `UC${Date.now()}${Math.random().toString(36).substr(2, 16)}`;
+        const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
+
+        // 1. Fetch channel details from YouTube
+        const channelResponse = await youtubeService.getChannelByHandle(cleanHandle);
+
+        if (!channelResponse || !channelResponse.items || channelResponse.items.length === 0) {
+          return c.json({ error: 'Channel not found on YouTube' }, 404);
+        }
+
+        const channel = channelResponse.items[0];
+        const channelId = channel.id;
+
+        // 2. Check if channel already exists for this user
+        const existingChannel = await env.DB.prepare(
+          'SELECT id FROM Channels WHERE user_id = ? AND id = ?'
+        ).bind(userId, channelId).first();
+
+        if (existingChannel) {
+          return c.json({ error: 'Channel already added', channel });
+        }
+
+        // 3. Insert channel into database with full details
+        const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
 
         const result = await env.DB.prepare(`
-                INSERT INTO Channels (id, user_id, handle)
-                VALUES (?, ?, ?)
-            `).bind(channelId, userId, cleanHandle).run();
+            INSERT INTO Channels (
+                id, user_id, handle, title, description, thumbnail, 
+                subscriber_count, video_count, view_count, 
+                country, custom_url, published_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          channelId,
+          userId,
+          channel.snippet?.customUrl || cleanHandle, // Prefer customUrl if available which is usually the handle
+          channel.snippet?.title,
+          channel.snippet?.description,
+          thumbnail,
+          parseInt(channel.statistics?.subscriberCount || '0'),
+          parseInt(channel.statistics?.videoCount || '0'),
+          parseInt(channel.statistics?.viewCount || '0'),
+          channel.snippet?.country,
+          channel.snippet?.customUrl,
+          channel.snippet?.publishedAt
+        ).run();
 
         if (!result.success) {
           return c.json({ error: 'Failed to save channel' }, 500);
         }
 
-        return c.json({ success: true, channelId, message: 'Channel added successfully' });
+        return c.json({
+          success: true,
+          message: 'Channel added successfully',
+          channel: {
+            id: channelId,
+            title: channel.snippet?.title,
+            handle: channel.snippet?.customUrl || cleanHandle,
+            thumbnail: thumbnail,
+            description: channel.snippet?.description,
+            statistics: channel.statistics
+          }
+        });
+
       } catch (error: any) {
         console.error('Add Channel API Error:', error);
         return c.json({ error: 'Failed to add channel' }, 500);

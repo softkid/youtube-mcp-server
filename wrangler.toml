@@ -19,3 +19,7 @@ command = "npm run build"
 # Note: This project now uses Hono framework and is compatible with Cloudflare Workers
 # The server can run both as a Cloudflare Worker and as a local Node.js server
 
+[[d1_databases]]
+binding = "DB"
+database_name = "youtubegenius"
+database_id = "a09fd212-a9e9-4d5f-832b-d873851b3ee3"

@@ -69,3 +69,16 @@ CREATE INDEX idx_channels_user_id ON Channels(user_id);
 CREATE INDEX idx_channels_handle ON Channels(handle);
 CREATE INDEX idx_videos_channel_id ON Videos(channel_id);
 CREATE INDEX idx_branding_user_id ON BrandingPackages(user_id);
+
+-- API 키 관리 테이블
+CREATE TABLE ApiKeys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  key_value TEXT NOT NULL,
+  alias TEXT, -- 별칭 (예: "내 메인 키")
+  is_active INTEGER DEFAULT 0, -- 0: 비활성, 1: 활성
+  created_at INTEGER DEFAULT (strftime('%s', 'now')),
+  FOREIGN KEY (user_id) REFERENCES Users(id)
+);
+
+CREATE INDEX idx_apikeys_user_id ON ApiKeys(user_id);

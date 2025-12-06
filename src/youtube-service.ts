@@ -11,6 +11,34 @@ import {
   SearchListResponse
 } from './types/youtube-types';
 
+export interface VideoItem {
+  kind: string;
+  etag: string;
+  id: string;
+  snippet: VideoSnippet;
+  statistics?: VideoStatistics;
+  contentDetails?: VideoContentDetails;
+  status?: {
+    uploadStatus: string;
+    privacyStatus: string;
+    license: string;
+    embeddable: boolean;
+    publicStatsViewable: boolean;
+  };
+  items?: VideoItem[]; // Add this line
+}
+
+export interface ChannelItem {
+  kind: string;
+  etag: string;
+  id: string;
+  snippet: ChannelSnippet;
+  statistics?: ChannelStatistics;
+  contentDetails?: ChannelContentDetails;
+  brandingSettings?: ChannelBrandingSettings;
+  items?: ChannelItem[]; // Add this line
+}
+
 export class DatabaseInitializer {
   private db: InstanceType<typeof Database>;
 

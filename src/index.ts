@@ -1897,6 +1897,181 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
     });
 
     // 검색 로그 조회
+
+    // D1 Channels API
+    app.get('/api/channels', async (c) => {
+      try {
+        const userId = c.req.query('userId');
+        if (!userId) {
+          return c.json({ error: 'UserId is required' }, 400);
+        }
+
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        const { results } = await env.DB.prepare(
+          'SELECT * FROM Channels WHERE user_id = ? ORDER BY created_at DESC'
+        ).bind(userId).all();
+
+        return c.json({ channels: results });
+      } catch (error: any) {
+        console.error('Get Channels API Error:', error);
+        return c.json({ error: 'Failed to fetch channels' }, 500);
+      }
+    });
+
+    app.post('/api/add-channel', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { handle, userId } = body;
+
+        if (!handle || !userId) {
+          return c.json({ error: 'Handle and userId are required' }, 400);
+        }
+
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        const cleanHandle = handle.startsWith('@') ? handle.substring(1) : handle;
+
+        const existingChannel = await env.DB.prepare(
+          'SELECT id FROM Channels WHERE user_id = ? AND handle = ?'
+        ).bind(userId, cleanHandle).first();
+
+        if (existingChannel) {
+          return c.json({ error: 'Channel already added' }, 400);
+        }
+
+        const channelId = `UC${Date.now()}${Math.random().toString(36).substr(2, 16)}`;
+
+        const result = await env.DB.prepare(`
+                INSERT INTO Channels (id, user_id, handle)
+                VALUES (?, ?, ?)
+            `).bind(channelId, userId, cleanHandle).run();
+
+        if (!result.success) {
+          return c.json({ error: 'Failed to save channel' }, 500);
+        }
+
+        return c.json({ success: true, channelId, message: 'Channel added successfully' });
+      } catch (error: any) {
+        console.error('Add Channel API Error:', error);
+        return c.json({ error: 'Failed to add channel' }, 500);
+      }
+    });
+
+
+    // API Key Management
+    app.get('/api/apikeys', async (c) => {
+      try {
+        const userId = c.req.query('userId');
+        if (!userId) {
+          return c.json({ error: 'UserId is required' }, 400);
+        }
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        const { results } = await env.DB.prepare(
+          'SELECT * FROM ApiKeys WHERE user_id = ? ORDER BY created_at DESC'
+        ).bind(userId).all();
+
+        return c.json({ apiKeys: results });
+      } catch (error: any) {
+        console.error('Get API Keys Error:', error);
+        return c.json({ error: 'Failed to fetch API keys' }, 500);
+      }
+    });
+
+    app.post('/api/apikeys', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { userId, key, alias } = body;
+
+        if (!userId || !key) {
+          return c.json({ error: 'UserId and Key are required' }, 400);
+        }
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        // Check if it's the first key, if so make it active
+        const existingKeys = await env.DB.prepare(
+          'SELECT COUNT(*) as count FROM ApiKeys WHERE user_id = ?'
+        ).bind(userId).first();
+
+        const isActive = (existingKeys?.count === 0) ? 1 : 0;
+
+        const result = await env.DB.prepare(
+          'INSERT INTO ApiKeys (user_id, key_value, alias, is_active) VALUES (?, ?, ?, ?)'
+        ).bind(userId, key, alias || 'My API Key', isActive).run();
+
+        if (!result.success) {
+          return c.json({ error: 'Failed to save API key' }, 500);
+        }
+
+        return c.json({ success: true, message: 'API Key added successfully' });
+      } catch (error: any) {
+        console.error('Add API Key Error:', error);
+        return c.json({ error: 'Failed to add API key' }, 500);
+      }
+    });
+
+    app.put('/api/apikeys/:id/active', async (c) => {
+      try {
+        const id = c.req.param('id');
+        const body = await c.req.json();
+        const { userId } = body;
+
+        if (!userId) {
+          return c.json({ error: 'UserId is required' }, 400);
+        }
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        // Transaction: Deactivate all for user, then activate specific one
+        const batch = await env.DB.batch([
+          env.DB.prepare('UPDATE ApiKeys SET is_active = 0 WHERE user_id = ?').bind(userId),
+          env.DB.prepare('UPDATE ApiKeys SET is_active = 1 WHERE id = ? AND user_id = ?').bind(id, userId)
+        ]);
+
+        return c.json({ success: true, message: 'API Key activated' });
+      } catch (error: any) {
+        console.error('Activate API Key Error:', error);
+        return c.json({ error: 'Failed to activate API key' }, 500);
+      }
+    });
+
+    app.delete('/api/apikeys/:id', async (c) => {
+      try {
+        const id = c.req.param('id');
+        const userId = c.req.query('userId');
+
+        if (!userId) {
+          return c.json({ error: 'UserId is required' }, 400);
+        }
+        if (!env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        const result = await env.DB.prepare(
+          'DELETE FROM ApiKeys WHERE id = ? AND user_id = ?'
+        ).bind(id, userId).run();
+
+        if (!result.success) {
+          return c.json({ error: 'Failed to delete API key' }, 500);
+        }
+
+        return c.json({ success: true, message: 'API Key deleted' });
+      } catch (error: any) {
+        console.error('Delete API Key Error:', error);
+        return c.json({ error: 'Failed to delete API key' }, 500);
+      }
+    });
+
     app.get('/api/logs/search', async (c) => {
       try {
         const query = c.req.query('query');

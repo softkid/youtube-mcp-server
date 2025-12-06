@@ -1,43 +1,14 @@
 import Database from 'better-sqlite3';
-import { exec } from 'child_process';
 import { readFileSync } from 'fs';
 import { google, youtube_v3 } from 'googleapis';
-import { 
-  VideoItem, 
-  ChannelItem, 
-  VideoListResponse, 
+import {
+  VideoItem,
+  ChannelItem,
+  VideoListResponse,
   ChannelListResponse,
   CommentThreadListResponse,
   SearchListResponse
-} from './types/youtube-types';
-
-export interface VideoItem {
-  kind: string;
-  etag: string;
-  id: string;
-  snippet: VideoSnippet;
-  statistics?: VideoStatistics;
-  contentDetails?: VideoContentDetails;
-  status?: {
-    uploadStatus: string;
-    privacyStatus: string;
-    license: string;
-    embeddable: boolean;
-    publicStatsViewable: boolean;
-  };
-  items?: VideoItem[]; // Add this line
-}
-
-export interface ChannelItem {
-  kind: string;
-  etag: string;
-  id: string;
-  snippet: ChannelSnippet;
-  statistics?: ChannelStatistics;
-  contentDetails?: ChannelContentDetails;
-  brandingSettings?: ChannelBrandingSettings;
-  items?: ChannelItem[]; // Add this line
-}
+} from './types/youtube-types.js';
 
 export class DatabaseInitializer {
   private db: InstanceType<typeof Database>;
@@ -77,105 +48,18 @@ export class DatabaseInitializer {
 
 export class YouTubeService {
   private dbInitializer: DatabaseInitializer;
-  private youtube: youtube_v3.Youtube;
+  public youtube: youtube_v3.Youtube; // Made public for access in index.ts
   private apiKey: string;
-  private youtubeApi: {
-    videos: {
-      list: (params: youtube_v3.Params$Resource$Videos$List) => Promise<{ data: VideoListResponse }>;
-    };
-    channels: {
-      list: (params: youtube_v3.Params$Resource$Channels$List) => Promise<{ data: ChannelListResponse }>;
-    };
-    commentThreads: {
-      list: (params: youtube_v3.Params$Resource$Commentthreads$List) => Promise<{ data: CommentThreadListResponse }>;
-    };
-    search: {
-      list: (params: youtube_v3.Params$Resource$Search$List) => Promise<{ data: SearchListResponse }>;
-    };
-    videoCategories: {
-      list: (params: youtube_v3.Params$Resource$Videocategories$List) => Promise<any>;
-    };
-  };
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
     this.dbInitializer = new DatabaseInitializer();
-    
+
     // Initialize the YouTube client
     this.youtube = google.youtube({
       version: 'v3',
       auth: this.apiKey
     });
-    
-    // Mock implementation for testing
-    this.youtubeApi = {
-      videos: {
-        list: async (params: youtube_v3.Params$Resource$Videos$List) => {
-          // Mock implementation for testing
-          return { 
-            data: { 
-              kind: 'youtube#videoListResponse',
-              etag: '',
-              items: [],
-              pageInfo: { totalResults: 0, resultsPerPage: 0 }
-            } as VideoListResponse 
-          };
-        }
-      },
-      channels: {
-        list: async (params: youtube_v3.Params$Resource$Channels$List) => {
-          // Mock implementation for testing
-          return { 
-            data: { 
-              kind: 'youtube#channelListResponse',
-              etag: '',
-              items: [],
-              pageInfo: { totalResults: 0, resultsPerPage: 0 }
-            } as ChannelListResponse 
-          };
-        }
-      },
-      commentThreads: {
-        list: async (params: youtube_v3.Params$Resource$Commentthreads$List) => {
-          // Mock implementation for testing
-          return { 
-            data: { 
-              kind: 'youtube#commentThreadListResponse',
-              etag: '',
-              items: [],
-              pageInfo: { totalResults: 0, resultsPerPage: 0 }
-            } as CommentThreadListResponse 
-          };
-        }
-      },
-      search: {
-        list: async (params: youtube_v3.Params$Resource$Search$List) => {
-          // Mock implementation for testing
-          return { 
-            data: { 
-              kind: 'youtube#searchListResponse',
-              etag: '',
-              regionCode: '',
-              items: [],
-              pageInfo: { totalResults: 0, resultsPerPage: 0 }
-            } as SearchListResponse 
-          };
-        }
-      },
-      videoCategories: {
-        list: async (params: youtube_v3.Params$Resource$Videocategories$List) => {
-          // Mock implementation for testing
-          return { 
-            data: { 
-              kind: 'youtube#videoCategoryListResponse',
-              etag: '',
-              items: []
-            } 
-          };
-        }
-      }
-    };
-    this.apiKey = apiKey;
   }
 
   async initialize() {
@@ -189,12 +73,12 @@ export class YouTubeService {
       part: ['snippet', 'contentDetails', 'statistics', 'status'],
       id: [videoId]
     });
-    
+
     if (!response.data.items || response.data.items.length === 0) {
       throw new Error(`Video with ID ${videoId} not found`);
     }
-    
-    return  response.data.items[0] as VideoItem & { kind: string };
+
+    return response.data.items[0] as VideoItem;
   }
 
   async getChannelDetails(channelId: string): Promise<ChannelItem> {
@@ -202,17 +86,17 @@ export class YouTubeService {
       part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
       id: [channelId]
     });
-    
+
     if (!response.data.items || response.data.items.length === 0) {
       throw new Error(`Channel with ID ${channelId} not found`);
     }
-    
-    return  response.data.items[0] as ChannelItem & { kind: string };
+
+    return response.data.items[0] as ChannelItem;
   }
 
   async getTranscript(videoId: string, language?: string) {
     // Mock data
-    return [{ offset: 0, text: 'This is a test transcript.' }];
+    return [{ offset: 0, text: 'This is a test transcript.', duration: 5 }];
   }
 
   async getEnhancedTranscript(videoIds: string[], options: any) {
@@ -230,13 +114,59 @@ export class YouTubeService {
     return { text: 'Segmented transcript content', metadata: [] };
   }
 
-  async searchVideos(query: string, maxResults: number, filters: any) {
+  async searchVideos(query: string, maxResults: number, filters: any): Promise<SearchListResponse> {
     // Mock data
-    return { items: [] };
+    return {
+      kind: 'youtube#searchListResponse',
+      etag: '',
+      regionCode: 'US',
+      items: [],
+      pageInfo: { totalResults: 0, resultsPerPage: maxResults }
+    };
   }
 
-  async getComments(videoId: string, maxResults: number, options: any) {
+  async getComments(videoId: string, maxResults: number, options: any): Promise<CommentThreadListResponse> {
     // Mock data
-    return { items: [], pageInfo: { totalResults: 0 } };
+    return {
+      kind: 'youtube#commentThreadListResponse',
+      etag: '',
+      items: [],
+      pageInfo: { totalResults: 0, resultsPerPage: maxResults }
+    };
+  }
+
+  async getMyChannels(accessToken: string, maxResults: number = 50, pageToken?: string): Promise<ChannelListResponse> {
+    try {
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({ access_token: accessToken });
+
+      const youtube = google.youtube({ version: 'v3', auth });
+
+      const response = await youtube.channels.list({
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings', 'status'],
+        mine: true,
+        maxResults,
+        pageToken
+      });
+
+      return response.data as ChannelListResponse;
+    } catch (error) {
+      console.error('Error fetching my channels:', error);
+      throw error;
+    }
+  }
+
+  async getChannelByHandle(handle: string): Promise<ChannelListResponse> {
+    try {
+      const response = await this.youtube.channels.list({
+        part: ['snippet', 'statistics', 'contentDetails', 'brandingSettings'],
+        forHandle: handle
+      });
+
+      return response.data as ChannelListResponse;
+    } catch (error) {
+      console.error('Error fetching channel by handle:', error);
+      throw error;
+    }
   }
 }

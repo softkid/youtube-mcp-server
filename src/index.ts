@@ -1069,8 +1069,9 @@ const cloudflareWorker = {
         const videoResponse = await youtubeService.getVideoDetails(videoIds);
         const videos = videoResponse.items || [];
 
+
         // 채널 정보 가져오기
-        const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))];
+        const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))] as string[];
         const channelMap = new Map();
 
         if (channelIds.length > 0) {
@@ -1143,7 +1144,7 @@ const cloudflareWorker = {
         const videos = response.data.items || [];
 
         // 채널 정보 가져오기
-        const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))];
+        const channelIds = [...new Set(videos.map((v: any) => v.snippet?.channelId).filter(Boolean))] as string[];
         const channelMap = new Map();
 
         if (channelIds.length > 0) {

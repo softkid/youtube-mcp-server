@@ -1903,7 +1903,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
     app.post('/api/add-channel', async (c) => {
       try {
         const body = await c.req.json();
-        const { handle, userId } = body;
+        const { handle, userId, email } = body;
 
         if (!handle || !userId) {
           return c.json({ error: 'Handle and userId are required' }, 400);
@@ -1915,6 +1915,17 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
 
         if (!youtubeService) {
           return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+
+        // Ensure user exists to satisfy FK constraint
+        if (email) {
+          try {
+            await env.DB.prepare(
+              'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
+            ).bind(userId, email).run();
+          } catch (e) {
+            console.error('Failed to ensure user exists:', e);
+          }
         }
 
         const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;

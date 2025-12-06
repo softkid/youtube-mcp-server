@@ -1005,39 +1005,15 @@ const cloudflareWorker = {
       youtubeService = new YouTubeService(apiKey);
     }
 
-    // CORS middleware - Cloudflare Access와 호환되도록 강화
-    app.use('*', async (c, next) => {
-      // CORS 헤더 설정
-      c.header('Access-Control-Allow-Origin', '*');
-      c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, CF-Access-Client-Id, CF-Access-Client-Secret');
-      c.header('Access-Control-Allow-Credentials', 'true');
-      c.header('Access-Control-Max-Age', '86400'); // 24시간
-
-      // Cloudflare Access 헤더 확인 (선택적)
-      const cfAccessClientId = c.req.header('CF-Access-Client-Id');
-      const cfAccessClientSecret = c.req.header('CF-Access-Client-Secret');
-
-      // OPTIONS 프리플라이트 요청 처리
-      if (c.req.method === 'OPTIONS') {
-        return c.json({}, 200);
-      }
-
-      // Cloudflare Access 인증이 필요한 경우를 위한 로깅 (디버깅용)
-      if (process.env.DEBUG_ACCESS === 'true') {
-        console.log('Request headers:', {
-          'CF-Access-Client-Id': cfAccessClientId ? 'present' : 'missing',
-          'CF-Access-Client-Secret': cfAccessClientSecret ? 'present' : 'missing',
-          'Origin': c.req.header('Origin'),
-          'User-Agent': c.req.header('User-Agent')
-        });
-      }
-
-      await next();
-
-      // 응답에도 CORS 헤더 보장
-      c.header('Access-Control-Allow-Origin', '*');
-    });
+    // CORS middleware using hono/cors
+    app.use('/*', cors({
+      origin: '*',
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Upgrade-Insecure-Requests', 'X-Requested-With', 'CF-Access-Client-Id', 'CF-Access-Client-Secret'],
+      exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
+      maxAge: 86400,
+      credentials: true,
+    }));
 
     // REST API: 비디오 검색
     app.post('/api/search-videos', async (c) => {

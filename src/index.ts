@@ -1472,10 +1472,14 @@ const cloudflareWorker = {
     app.post('/api/get-my-channels', async (c) => {
       try {
         const body = await c.req.json();
-        const { accessToken, maxResults, pageToken } = body;
+        const { userId, accessToken, maxResults, pageToken } = body;
 
         if (!accessToken) {
           return c.json({ error: 'accessToken is required' }, 400);
+        }
+
+        if (!userId) {
+          return c.json({ error: 'userId is required' }, 400);
         }
 
         if (!youtubeService) {
@@ -1484,6 +1488,7 @@ const cloudflareWorker = {
 
         // Get channels with pagination support
         const response = await youtubeService.getMyChannels(
+          userId,
           accessToken,
           maxResults || 50,  // Default to 50 if not specified
           pageToken         // Can be undefined

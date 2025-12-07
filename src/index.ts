@@ -2018,6 +2018,104 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
       }
     });
 
+    // Alias for /api/channels POST (for consistency with REST conventions)
+    app.post('/api/channels', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { handle, userId, email } = body;
+
+        if (!handle || !userId) {
+          return c.json({ error: 'Handle and userId are required' }, 400);
+        }
+
+        if (!c.env.DB) {
+          return c.json({ error: 'Database not configured' }, 500);
+        }
+
+        if (!youtubeService) {
+          return c.json({ error: 'YouTube service not initialized' }, 500);
+        }
+
+        // Ensure user exists to satisfy FK constraint
+        if (email) {
+          try {
+            await c.env.DB.prepare(
+              'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
+            ).bind(userId, email).run();
+          } catch (e) {
+            console.error('Failed to ensure user exists:', e);
+          }
+        }
+
+        const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
+
+        // 1. Fetch channel details from YouTube
+        const channelResponse = await youtubeService.getChannelByHandle(cleanHandle);
+
+        if (!channelResponse || !channelResponse.items || channelResponse.items.length === 0) {
+          return c.json({ error: 'Channel not found on YouTube' }, 404);
+        }
+
+        const channel = channelResponse.items[0];
+        const channelId = channel.id;
+
+        // 2. Check if channel already exists for this user
+        const existingChannel = await c.env.DB.prepare(
+          'SELECT id FROM Channels WHERE user_id = ? AND id = ?'
+        ).bind(userId, channelId).first();
+
+        if (existingChannel) {
+          return c.json({ error: 'Channel already added', channel });
+        }
+
+        // 3. Insert channel into database with full details
+        const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
+
+        const result = await c.env.DB.prepare(`
+            INSERT INTO Channels (
+                id, user_id, handle, title, description, thumbnail, 
+                subscriber_count, video_count, view_count, 
+                country, custom_url, published_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          channelId,
+          userId,
+          channel.snippet?.customUrl || cleanHandle,
+          channel.snippet?.title,
+          channel.snippet?.description,
+          thumbnail,
+          parseInt(channel.statistics?.subscriberCount || '0'),
+          parseInt(channel.statistics?.videoCount || '0'),
+          parseInt(channel.statistics?.viewCount || '0'),
+          channel.snippet?.country,
+          channel.snippet?.customUrl,
+          channel.snippet?.publishedAt
+        ).run();
+
+        if (!result.success) {
+          return c.json({ error: 'Failed to save channel' }, 500);
+        }
+
+        return c.json({
+          success: true,
+          message: 'Channel added successfully',
+          channel: {
+            id: channelId,
+            title: channel.snippet?.title,
+            handle: channel.snippet?.customUrl || cleanHandle,
+            thumbnail: thumbnail,
+            description: channel.snippet?.description,
+            statistics: channel.statistics
+          }
+        });
+
+      } catch (error: any) {
+        console.error('Add Channel API Error:', error);
+        return c.json({ error: 'Failed to add channel' }, 500);
+      }
+    });
+
 
     // API Key Management
     app.get('/api/apikeys', async (c) => {

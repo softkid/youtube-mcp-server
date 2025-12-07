@@ -2323,7 +2323,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
       return c.json({ error: 'Not Found', status: 404 }, 404);
     });
 
-    return app.fetch(request);
+    return app.fetch(request, env);
   }
 };
 

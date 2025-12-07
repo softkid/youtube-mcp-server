@@ -2047,7 +2047,30 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'Failed to save API key' }, 500);
         }
 
-        return c.json({ success: true, message: 'API Key added successfully' });
+        // Get the inserted API key using last_row_id
+        const insertedKeyId = result.meta?.last_row_id;
+        if (insertedKeyId) {
+          const insertedKey = await env.DB.prepare(
+            'SELECT * FROM ApiKeys WHERE id = ?'
+          ).bind(insertedKeyId).first();
+
+          return c.json({ 
+            success: true, 
+            message: 'API Key added successfully',
+            apiKey: insertedKey
+          });
+        } else {
+          // Fallback: query by user_id and key_value
+          const insertedKey = await env.DB.prepare(
+            'SELECT * FROM ApiKeys WHERE user_id = ? AND key_value = ? ORDER BY created_at DESC LIMIT 1'
+          ).bind(userId, key).first();
+
+          return c.json({ 
+            success: true, 
+            message: 'API Key added successfully',
+            apiKey: insertedKey
+          });
+        }
       } catch (error: any) {
         console.error('Add API Key Error:', error);
         return c.json({ error: 'Failed to add API key' }, 500);

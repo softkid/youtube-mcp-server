@@ -1979,6 +1979,13 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         // 3. Insert channel into database with full details
         const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
 
+        // Convert undefined to null for D1 compatibility
+        const title = channel.snippet?.title || null;
+        const description = channel.snippet?.description || null;
+        const country = channel.snippet?.country || null;
+        const customUrl = channel.snippet?.customUrl || cleanHandle;
+        const publishedAt = channel.snippet?.publishedAt || null;
+
         const result = await c.env.DB.prepare(`
             INSERT INTO Channels (
                 id, user_id, handle, title, description, thumbnail, 
@@ -1989,16 +1996,16 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         `).bind(
           channelId,
           userId,
-          channel.snippet?.customUrl || cleanHandle,
-          channel.snippet?.title,
-          channel.snippet?.description,
-          thumbnail,
+          customUrl,
+          title,
+          description,
+          thumbnail || null,
           parseInt(channel.statistics?.subscriberCount || '0'),
           parseInt(channel.statistics?.videoCount || '0'),
           parseInt(channel.statistics?.viewCount || '0'),
-          channel.snippet?.country,
-          channel.snippet?.customUrl,
-          channel.snippet?.publishedAt
+          country,
+          customUrl,
+          publishedAt
         ).run();
 
         if (!result.success) {

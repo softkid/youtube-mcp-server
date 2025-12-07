@@ -12,7 +12,8 @@
     "prebuild": "rimraf dist && mkdir dist",
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test:channel": "node test-channel-by-handle.js"
   },
   "repository": {
     "type": "git",

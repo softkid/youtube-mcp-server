@@ -1944,14 +1944,15 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         }
 
         // Ensure user exists to satisfy FK constraint
-        if (email) {
-          try {
-            await c.env.DB.prepare(
-              'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
-            ).bind(userId, email).run();
-          } catch (e) {
-            console.error('Failed to ensure user exists:', e);
-          }
+        // Use email from body, or generate placeholder email from userId
+        const userEmail = email || `${userId}@placeholder.com`;
+        try {
+          await c.env.DB.prepare(
+            'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
+          ).bind(userId, userEmail).run();
+        } catch (e) {
+          console.error('Failed to ensure user exists:', e);
+          // Continue anyway - user might already exist
         }
 
         const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
@@ -2001,7 +2002,12 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         ).run();
 
         if (!result.success) {
-          return c.json({ error: 'Failed to save channel' }, 500);
+          console.error('Database insert failed:', result);
+          const errorDetails = result.error ? String(result.error) : 'Unknown database error';
+          return c.json({ 
+            error: 'Failed to save channel', 
+            details: errorDetails 
+          }, 500);
         }
 
         return c.json({
@@ -2019,7 +2025,15 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
 
       } catch (error: any) {
         console.error('Add Channel API Error:', error);
-        return c.json({ error: 'Failed to add channel' }, 500);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return c.json({ 
+          error: 'Failed to add channel', 
+          details: error.message || 'Unknown error'
+        }, 500);
       }
     });
 

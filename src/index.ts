@@ -2040,18 +2040,24 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         }
 
         // Check if it's the first key, if so make it active
-        const existingKeys = await c.env.DB.prepare(
+        const existingKeysResult = await c.env.DB.prepare(
           'SELECT COUNT(*) as count FROM ApiKeys WHERE user_id = ?'
         ).bind(userId).first();
 
-        const isActive = (existingKeys?.count === 0) ? 1 : 0;
+        // Handle different return types from D1
+        const count = existingKeysResult?.count !== undefined 
+          ? (typeof existingKeysResult.count === 'string' ? parseInt(existingKeysResult.count, 10) : Number(existingKeysResult.count))
+          : 0;
+
+        const isActive = count === 0 ? 1 : 0;
 
         const result = await c.env.DB.prepare(
           'INSERT INTO ApiKeys (user_id, key_value, alias, is_active) VALUES (?, ?, ?, ?)'
         ).bind(userId, key, alias || 'My API Key', isActive).run();
 
         if (!result.success) {
-          return c.json({ error: 'Failed to save API key' }, 500);
+          console.error('Insert failed:', result);
+          return c.json({ error: 'Failed to save API key', details: result.error || 'Unknown error' }, 500);
         }
 
         // Get the inserted API key using last_row_id
@@ -2061,26 +2067,41 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
             'SELECT * FROM ApiKeys WHERE id = ?'
           ).bind(insertedKeyId).first();
 
-          return c.json({ 
-            success: true, 
-            message: 'API Key added successfully',
-            apiKey: insertedKey
-          });
-        } else {
-          // Fallback: query by user_id and key_value
-          const insertedKey = await c.env.DB.prepare(
-            'SELECT * FROM ApiKeys WHERE user_id = ? AND key_value = ? ORDER BY created_at DESC LIMIT 1'
-          ).bind(userId, key).first();
-
-          return c.json({ 
-            success: true, 
-            message: 'API Key added successfully',
-            apiKey: insertedKey
-          });
+          if (insertedKey) {
+            return c.json({ 
+              success: true, 
+              message: 'API Key added successfully',
+              apiKey: insertedKey
+            });
+          }
         }
+        
+        // Fallback: query by user_id and key_value
+        const insertedKey = await c.env.DB.prepare(
+          'SELECT * FROM ApiKeys WHERE user_id = ? AND key_value = ? ORDER BY created_at DESC LIMIT 1'
+        ).bind(userId, key).first();
+
+        if (!insertedKey) {
+          console.error('Failed to retrieve inserted key');
+          return c.json({ error: 'API key saved but failed to retrieve', details: 'Please refresh the page' }, 500);
+        }
+
+        return c.json({ 
+          success: true, 
+          message: 'API Key added successfully',
+          apiKey: insertedKey
+        });
       } catch (error: any) {
         console.error('Add API Key Error:', error);
-        return c.json({ error: 'Failed to add API key' }, 500);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return c.json({ 
+          error: 'Failed to add API key', 
+          details: error.message || 'Unknown error'
+        }, 500);
       }
     });
 

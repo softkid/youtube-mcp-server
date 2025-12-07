@@ -1898,7 +1898,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         }
 
         const { results, success, error } = await c.env.DB.prepare(
-          'SELECT * FROM Channels WHERE user_id = ? ORDER BY created_at DESC'
+          'SELECT * FROM Channels WHERE user_id = ? ORDER BY updated_at DESC'
         ).bind(userId).all();
 
         if (!success) {
@@ -2031,13 +2031,35 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const { results, success, error } = await c.env.DB.prepare(
-          'SELECT * FROM ApiKeys WHERE user_id = ? ORDER BY created_at DESC'
-        ).bind(userId).all();
+        // Check if ApiKeys table exists, if not return empty array
+        let results: any[] = [];
+        let success = true;
+        let dbError: any = null;
+        
+        try {
+          const queryResult = await c.env.DB.prepare(
+            'SELECT * FROM ApiKeys WHERE user_id = ? ORDER BY created_at DESC'
+          ).bind(userId).all();
+          
+          results = queryResult.results || [];
+          success = true;
+        } catch (err: any) {
+          // Table doesn't exist or other error
+          console.error('ApiKeys table query error:', err);
+          const errorMsg = err?.message || String(err) || '';
+          if (errorMsg.includes('no such table') || errorMsg.includes('no such column')) {
+            // Table doesn't exist, return empty array
+            results = [];
+            success = true;
+          } else {
+            success = false;
+            dbError = errorMsg || 'Unknown error';
+          }
+        }
 
         if (!success) {
-          console.error('Database query failed:', error);
-          return c.json({ error: 'Failed to fetch API keys', details: error || 'Unknown error' }, 500);
+          console.error('Database query failed:', dbError);
+          return c.json({ error: 'Failed to fetch API keys', details: dbError || 'Unknown error' }, 500);
         }
 
         return c.json({ apiKeys: results || [] });

@@ -11,9 +11,11 @@ import {
 export class YouTubeService {
   public youtube: youtube_v3.Youtube; // Made public for access in index.ts
   private apiKey: string;
+  private db?: any; // Database instance for API key retrieval
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, db?: any) {
     this.apiKey = apiKey;
+    this.db = db;
 
     // Initialize the YouTube client
     this.youtube = google.youtube({
@@ -25,6 +27,33 @@ export class YouTubeService {
   async initialize() {
     // Database initialization is handled by Cloudflare D1
     console.log('YouTube Service initialized');
+  }
+
+  // Get active API key for a user from database
+  async getActiveApiKey(userId: string): Promise<string | null> {
+    if (!this.db) {
+      console.warn('Database not available, falling back to default API key');
+      return this.apiKey;
+    }
+
+    try {
+      const result = await this.db.prepare(
+        'SELECT key_value FROM ApiKeys WHERE user_id = ? AND is_active = 1'
+      ).bind(userId).first();
+
+      return result?.key_value || this.apiKey; // Fallback to default API key
+    } catch (error) {
+      console.error('Error fetching active API key:', error);
+      return this.apiKey; // Fallback to default API key
+    }
+  }
+
+  // Update YouTube client with new API key
+  private updateYouTubeClient(apiKey: string) {
+    this.youtube = google.youtube({
+      version: 'v3',
+      auth: apiKey
+    });
   }
 
 
@@ -88,8 +117,15 @@ export class YouTubeService {
     };
   }
 
-  async getMyChannels(accessToken: string, maxResults: number = 50, pageToken?: string): Promise<ChannelListResponse> {
+  async getMyChannels(userId: string, accessToken: string, maxResults: number = 50, pageToken?: string): Promise<ChannelListResponse> {
     try {
+      // Get user-specific API key from database
+      const userApiKey = await this.getActiveApiKey(userId);
+      if (!userApiKey) {
+        throw new Error('No API key found for user');
+      }
+
+      // Create new auth instance with user's API key
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: accessToken });
 

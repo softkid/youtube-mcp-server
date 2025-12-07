@@ -2089,6 +2089,18 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'Database not configured' }, 500);
         }
 
+        // Ensure user exists in Users table (for FOREIGN KEY constraint)
+        // Get email from request body if available, or use a placeholder
+        const email = body.email || `${userId}@placeholder.com`;
+        try {
+          await c.env.DB.prepare(
+            'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
+          ).bind(userId, email).run();
+        } catch (userError: any) {
+          // Log but don't fail - user might already exist
+          console.log('User creation/check:', userError?.message || 'User may already exist');
+        }
+
         // Check if it's the first key, if so make it active
         const existingKeysResult = await c.env.DB.prepare(
           'SELECT COUNT(*) as count FROM ApiKeys WHERE user_id = ?'

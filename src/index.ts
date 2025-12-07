@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { YouTubeService } from './youtube-service.js';
 import { TranscriptOptions } from './types/youtube-types.js';
+import type { D1Database } from '@cloudflare/workers-types';
 
 // Global type augmentation for log storage
 declare global {
@@ -994,10 +995,16 @@ interface ExecutionContext {
 }
 
 // Cloudflare Workers export
+// Define environment type for Cloudflare Workers
+interface Env {
+  DB?: D1Database;
+  YOUTUBE_API_KEY?: string;
+}
+
 const cloudflareWorker = {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
     const { Hono } = await import('hono');
-    const app = new Hono();
+    const app = new Hono<{ Bindings: Env }>();
 
     // Initialize YouTube service if not already initialized
     if (!youtubeService) {
@@ -1885,11 +1892,11 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'UserId is required' }, 400);
         }
 
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const { results } = await env.DB.prepare(
+        const { results } = await c.env.DB.prepare(
           'SELECT * FROM Channels WHERE user_id = ? ORDER BY created_at DESC'
         ).bind(userId).all();
 
@@ -1909,7 +1916,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'Handle and userId are required' }, 400);
         }
 
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
@@ -1920,7 +1927,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         // Ensure user exists to satisfy FK constraint
         if (email) {
           try {
-            await env.DB.prepare(
+            await c.env.DB.prepare(
               'INSERT OR IGNORE INTO Users (id, email) VALUES (?, ?)'
             ).bind(userId, email).run();
           } catch (e) {
@@ -1941,7 +1948,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         const channelId = channel.id;
 
         // 2. Check if channel already exists for this user
-        const existingChannel = await env.DB.prepare(
+        const existingChannel = await c.env.DB.prepare(
           'SELECT id FROM Channels WHERE user_id = ? AND id = ?'
         ).bind(userId, channelId).first();
 
@@ -1952,7 +1959,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         // 3. Insert channel into database with full details
         const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
 
-        const result = await env.DB.prepare(`
+        const result = await c.env.DB.prepare(`
             INSERT INTO Channels (
                 id, user_id, handle, title, description, thumbnail, 
                 subscriber_count, video_count, view_count, 
@@ -2005,11 +2012,11 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         if (!userId) {
           return c.json({ error: 'UserId is required' }, 400);
         }
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const { results } = await env.DB.prepare(
+        const { results } = await c.env.DB.prepare(
           'SELECT * FROM ApiKeys WHERE user_id = ? ORDER BY created_at DESC'
         ).bind(userId).all();
 
@@ -2028,18 +2035,18 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         if (!userId || !key) {
           return c.json({ error: 'UserId and Key are required' }, 400);
         }
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
         // Check if it's the first key, if so make it active
-        const existingKeys = await env.DB.prepare(
+        const existingKeys = await c.env.DB.prepare(
           'SELECT COUNT(*) as count FROM ApiKeys WHERE user_id = ?'
         ).bind(userId).first();
 
         const isActive = (existingKeys?.count === 0) ? 1 : 0;
 
-        const result = await env.DB.prepare(
+        const result = await c.env.DB.prepare(
           'INSERT INTO ApiKeys (user_id, key_value, alias, is_active) VALUES (?, ?, ?, ?)'
         ).bind(userId, key, alias || 'My API Key', isActive).run();
 
@@ -2050,7 +2057,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         // Get the inserted API key using last_row_id
         const insertedKeyId = result.meta?.last_row_id;
         if (insertedKeyId) {
-          const insertedKey = await env.DB.prepare(
+          const insertedKey = await c.env.DB.prepare(
             'SELECT * FROM ApiKeys WHERE id = ?'
           ).bind(insertedKeyId).first();
 
@@ -2061,7 +2068,7 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           });
         } else {
           // Fallback: query by user_id and key_value
-          const insertedKey = await env.DB.prepare(
+          const insertedKey = await c.env.DB.prepare(
             'SELECT * FROM ApiKeys WHERE user_id = ? AND key_value = ? ORDER BY created_at DESC LIMIT 1'
           ).bind(userId, key).first();
 
@@ -2086,14 +2093,14 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         if (!userId) {
           return c.json({ error: 'UserId is required' }, 400);
         }
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
         // Transaction: Deactivate all for user, then activate specific one
-        const batch = await env.DB.batch([
-          env.DB.prepare('UPDATE ApiKeys SET is_active = 0 WHERE user_id = ?').bind(userId),
-          env.DB.prepare('UPDATE ApiKeys SET is_active = 1 WHERE id = ? AND user_id = ?').bind(id, userId)
+        const batch = await c.env.DB.batch([
+          c.env.DB.prepare('UPDATE ApiKeys SET is_active = 0 WHERE user_id = ?').bind(userId),
+          c.env.DB.prepare('UPDATE ApiKeys SET is_active = 1 WHERE id = ? AND user_id = ?').bind(id, userId)
         ]);
 
         return c.json({ success: true, message: 'API Key activated' });
@@ -2111,11 +2118,11 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         if (!userId) {
           return c.json({ error: 'UserId is required' }, 400);
         }
-        if (!env.DB) {
+        if (!c.env.DB) {
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const result = await env.DB.prepare(
+        const result = await c.env.DB.prepare(
           'DELETE FROM ApiKeys WHERE id = ? AND user_id = ?'
         ).bind(id, userId).run();
 

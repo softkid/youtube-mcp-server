@@ -1972,16 +1972,121 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         const channel = channelResponse.items[0];
         const channelId = channel.id;
 
-        // 2. Check if channel already exists for this user
+        // 2. Check if channel already exists (by ID, regardless of user)
         const existingChannel = await c.env.DB.prepare(
-          'SELECT id FROM Channels WHERE user_id = ? AND id = ?'
-        ).bind(userId, channelId).first();
+          'SELECT id, user_id FROM Channels WHERE id = ?'
+        ).bind(channelId).first();
 
         if (existingChannel) {
-          return c.json({ error: 'Channel already added', channel });
+          // Channel exists - check if it belongs to this user
+          if (existingChannel.user_id === userId) {
+            // Same user, update the channel
+            const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
+            const title = channel.snippet?.title || null;
+            const description = channel.snippet?.description || null;
+            const country = channel.snippet?.country || null;
+            const customUrl = channel.snippet?.customUrl || cleanHandle;
+            const publishedAt = channel.snippet?.publishedAt || null;
+
+            const updateResult = await c.env.DB.prepare(`
+              UPDATE Channels SET
+                handle = ?,
+                title = ?,
+                description = ?,
+                thumbnail = ?,
+                subscriber_count = ?,
+                video_count = ?,
+                view_count = ?,
+                country = ?,
+                custom_url = ?,
+                published_at = ?,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE user_id = ? AND id = ?
+            `).bind(
+              customUrl,
+              title,
+              description,
+              thumbnail || null,
+              parseInt(channel.statistics?.subscriberCount || '0'),
+              parseInt(channel.statistics?.videoCount || '0'),
+              parseInt(channel.statistics?.viewCount || '0'),
+              country,
+              customUrl,
+              publishedAt,
+              userId,
+              channelId
+            ).run();
+
+            if (updateResult.success) {
+              return c.json({
+                success: true,
+                message: 'Channel updated successfully',
+                channel: {
+                  id: channelId,
+                  title: channel.snippet?.title,
+                  handle: channel.snippet?.customUrl || cleanHandle,
+                  thumbnail: thumbnail,
+                  description: channel.snippet?.description,
+                }
+              });
+            }
+          } else {
+            // Different user owns this channel - update user_id to current user
+            // This allows channel ownership transfer or sharing
+            const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
+            const title = channel.snippet?.title || null;
+            const description = channel.snippet?.description || null;
+            const country = channel.snippet?.country || null;
+            const customUrl = channel.snippet?.customUrl || cleanHandle;
+            const publishedAt = channel.snippet?.publishedAt || null;
+
+            const updateResult = await c.env.DB.prepare(`
+              UPDATE Channels SET
+                user_id = ?,
+                handle = ?,
+                title = ?,
+                description = ?,
+                thumbnail = ?,
+                subscriber_count = ?,
+                video_count = ?,
+                view_count = ?,
+                country = ?,
+                custom_url = ?,
+                published_at = ?,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `).bind(
+              userId,
+              customUrl,
+              title,
+              description,
+              thumbnail || null,
+              parseInt(channel.statistics?.subscriberCount || '0'),
+              parseInt(channel.statistics?.videoCount || '0'),
+              parseInt(channel.statistics?.viewCount || '0'),
+              country,
+              customUrl,
+              publishedAt,
+              channelId
+            ).run();
+
+            if (updateResult.success) {
+              return c.json({
+                success: true,
+                message: 'Channel added successfully',
+                channel: {
+                  id: channelId,
+                  title: channel.snippet?.title,
+                  handle: channel.snippet?.customUrl || cleanHandle,
+                  thumbnail: thumbnail,
+                  description: channel.snippet?.description,
+                }
+              });
+            }
+          }
         }
 
-        // 3. Insert channel into database with full details
+        // 3. Insert channel into database with full details (if not exists)
         const thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url;
 
         // Convert undefined to null for D1 compatibility
@@ -1991,13 +2096,15 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         const customUrl = channel.snippet?.customUrl || cleanHandle;
         const publishedAt = channel.snippet?.publishedAt || null;
 
+        // Use INSERT OR REPLACE to handle duplicate channel IDs across different users
+        // or INSERT OR IGNORE if we want to skip duplicates silently
         const result = await c.env.DB.prepare(`
-            INSERT INTO Channels (
+            INSERT OR REPLACE INTO Channels (
                 id, user_id, handle, title, description, thumbnail, 
                 subscriber_count, video_count, view_count, 
-                country, custom_url, published_at
+                country, custom_url, published_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         `).bind(
           channelId,
           userId,

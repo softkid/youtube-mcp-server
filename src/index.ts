@@ -2101,13 +2101,23 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
 
         const isActive = count === 0 ? 1 : 0;
 
-        const result = await c.env.DB.prepare(
-          'INSERT INTO ApiKeys (user_id, key_value, alias, is_active) VALUES (?, ?, ?, ?)'
-        ).bind(userId, key, alias || 'My API Key', isActive).run();
+        let result;
+        try {
+          result = await c.env.DB.prepare(
+            'INSERT INTO ApiKeys (user_id, key_value, alias, is_active) VALUES (?, ?, ?, ?)'
+          ).bind(userId, key, alias || 'My API Key', isActive).run();
+        } catch (insertError: any) {
+          console.error('INSERT query error:', insertError);
+          return c.json({ 
+            error: 'Failed to save API key', 
+            details: insertError?.message || String(insertError) || 'Database insert error'
+          }, 500);
+        }
 
         if (!result.success) {
           console.error('Insert failed:', result);
-          return c.json({ error: 'Failed to save API key', details: result.error || 'Unknown error' }, 500);
+          const errorDetails = result.error ? String(result.error) : 'Unknown database error';
+          return c.json({ error: 'Failed to save API key', details: errorDetails }, 500);
         }
 
         // Get the inserted API key using last_row_id

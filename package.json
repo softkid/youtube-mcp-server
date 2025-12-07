@@ -14,7 +14,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test:channel": "node test-channel-by-handle.js",
-    "test:channel-detail": "node test-channel-detail-analysis.js"
+    "test:channel-detail": "node test-channel-detail-analysis.js",
+    "test:channels-db": "node test-channels-db.js"
   },
   "repository": {
     "type": "git",

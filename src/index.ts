@@ -1893,17 +1893,31 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
         }
 
         if (!c.env.DB) {
+          console.error('Database not configured');
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const { results } = await c.env.DB.prepare(
+        const { results, success, error } = await c.env.DB.prepare(
           'SELECT * FROM Channels WHERE user_id = ? ORDER BY created_at DESC'
         ).bind(userId).all();
 
-        return c.json({ channels: results });
+        if (!success) {
+          console.error('Database query failed:', error);
+          return c.json({ error: 'Failed to fetch channels', details: error || 'Unknown error' }, 500);
+        }
+
+        return c.json({ channels: results || [] });
       } catch (error: any) {
         console.error('Get Channels API Error:', error);
-        return c.json({ error: 'Failed to fetch channels' }, 500);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return c.json({ 
+          error: 'Failed to fetch channels', 
+          details: error.message || 'Unknown error'
+        }, 500);
       }
     });
 
@@ -2013,17 +2027,31 @@ ${transcriptText ? `\nTranscript:\n${transcriptText}` : '\n(Transcript not avail
           return c.json({ error: 'UserId is required' }, 400);
         }
         if (!c.env.DB) {
+          console.error('Database not configured');
           return c.json({ error: 'Database not configured' }, 500);
         }
 
-        const { results } = await c.env.DB.prepare(
+        const { results, success, error } = await c.env.DB.prepare(
           'SELECT * FROM ApiKeys WHERE user_id = ? ORDER BY created_at DESC'
         ).bind(userId).all();
 
-        return c.json({ apiKeys: results });
+        if (!success) {
+          console.error('Database query failed:', error);
+          return c.json({ error: 'Failed to fetch API keys', details: error || 'Unknown error' }, 500);
+        }
+
+        return c.json({ apiKeys: results || [] });
       } catch (error: any) {
         console.error('Get API Keys Error:', error);
-        return c.json({ error: 'Failed to fetch API keys' }, 500);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return c.json({ 
+          error: 'Failed to fetch API keys', 
+          details: error.message || 'Unknown error'
+        }, 500);
       }
     });
 
